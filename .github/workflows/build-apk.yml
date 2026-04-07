@@ -1,5 +1,6 @@
 name: Build Release APK
 
+on:
   push:
     branches: [ "dev", "mesh-dev" ]
   workflow_dispatch:
