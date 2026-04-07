@@ -33,11 +33,18 @@ jobs:
         run: |
           sudo apt update
           sudo apt -y install ninja-build meson unzip python3-pip python3-setuptools gperf
+          pip3 install requests tgcrypto-pyrofork Kurigram
 
       - name: Set up NDK r21e
         uses: nttld/setup-ndk@v1.4.2
         with:
           ndk-version: r21e
+          link-to-sdk: true
+
+      - name: Set up NDK r23c
+        uses: nttld/setup-ndk@v1.4.2
+        with:
+          ndk-version: r23c
           link-to-sdk: true
 
       - name: Prepare Build Environment
@@ -56,19 +63,16 @@ jobs:
           echo "CHECK_UPDATES=1" >> $vars
           echo "VERSION_NUM=7" >> $vars
           
-          # Inherit to submodules just in case
+          # Forkgram specific properties (to avoid PropertyNotFoundException)
+          echo "USER_ID_OWNER=0" >> $vars
+          echo "UPDATE_CHANNEL_USERNAME=null" >> $vars
+          echo "LASTFM_API_KEY=null" >> $vars
+          echo "LASTFM_API_SECRET=null" >> $vars
+          echo "IS_PRIVATE=false" >> $vars
+          
+          # Inherit to submodules
           cp gradle.properties TMessagesProj/
           cp gradle.properties TMessagesProj_App/
-
-          # Generate dummy google-services.json
-          mkdir -p TMessagesProj
-          cat <<EOF > TMessagesProj/google-services.json
-          {
-            "project_info": { "project_number": "123456789", "project_id": "dummy-id" },
-            "client": [ { "client_info": { "mobilesdk_app_id": "1:123456789:android:dummy", "android_client_info": { "package_name": "org.forkclient.messenger" } } } ],
-            "configuration_version": "1"
-          }
-          EOF
 
           # Generate dummy keystore
           mkdir -p TMessagesProj/config
