@@ -694,6 +694,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             items.add(UItem.asHeader("Fork"));
             items.add(SettingCell.Factory.of(98, 0xFF55CA47, 0xFF27B434, 0, getString(R.string.ForkSettingsTitle)));
             items.add(SettingCell.Factory.of(99, 0xFF55CA47, 0xFF27B434, 0, getString(R.string.ForkCheckUpdate)));
+            items.add(SettingCell.Factory.of(101, 0xFF1BA4ED, 0xFF1488E1, R.drawable.settings_devices, "LoRa Mesh Settings"));
         }
 
         items.add(UItem.asShadow(null));
@@ -792,6 +793,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             return;
         }
         switch (item.id) {
+            case 101:
+                presentFragment(new org.telegram.ui.MeshSettingsActivity());
+                break;
             case 1:
                 presentFragment(new UserInfoActivity());
                 break;

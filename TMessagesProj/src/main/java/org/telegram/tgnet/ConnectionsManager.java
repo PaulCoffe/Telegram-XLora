@@ -595,7 +595,9 @@ public class ConnectionsManager extends BaseController {
             FileLog.d("selected ip strategy " + selectedStrategy);
         }
         native_setIpStrategy(currentAccount, selectedStrategy);
-        native_setNetworkAvailable(currentAccount, ApplicationLoader.isNetworkOnline(), ApplicationLoader.getCurrentNetworkType(), ApplicationLoader.isConnectionSlow());
+        boolean online = ApplicationLoader.isNetworkOnline();
+        native_setNetworkAvailable(currentAccount, online, ApplicationLoader.getCurrentNetworkType(), ApplicationLoader.isConnectionSlow());
+        org.telegram.messenger.mesh.MeshManager.getInstance().onNetworkStatusChanged(online);
     }
 
     public void setPushConnectionEnabled(boolean value) {

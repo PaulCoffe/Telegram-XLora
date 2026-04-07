@@ -4926,6 +4926,13 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 }
                 MessagesStorage.getInstance(currentAccount).putMessages(arr, false, true, false, 0, mode, threadMessageId);
                 MessagesController.getInstance(currentAccount).updateInterfaceWithMessages(peer, objArr, mode);
+
+                if (!ApplicationLoader.isNetworkOnline() && org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled()) {
+                    if (newMsg.message != null && !newMsg.message.isEmpty()) {
+                        org.telegram.messenger.mesh.MeshManager.getInstance().sendData(newMsg.message.getBytes());
+                    }
+                }
+
                 if (scheduleDate == 0) {
                     NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.dialogsNeedReload);
                 }
