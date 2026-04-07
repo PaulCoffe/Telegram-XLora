@@ -1,0 +1,76 @@
+name: Build Release APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gperf meson ninja-build yasm
+
+      - name: Setup Android NDK
+        run: |
+          echo "Installing NDK r21e (21.4.7075529)..."
+          echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;21.4.7075529"
+
+      - name: Setup Build Environment (Dummies)
+        run: |
+          mkdir -p TMessagesProj/config
+          echo "Generating dummy release.keystore..."
+          keytool -genkey -v -keystore TMessagesProj/config/release.keystore -alias alias -keyalg RSA -keysize 2048 -validity 10000 -dname "cn=Test, ou=Test, o=Test, l=Test, s=Test, c=US" -storepass password -keypass password
+          
+          # We already have a placeholder google-services.json in the commit, 
+          # but ensuring it exists here too just in case.
+          if [ ! -f TMessagesProj/google-services.json ]; then
+            echo "{}" > TMessagesProj/google-services.json
+          fi
+
+      - name: Build Native Libraries
+        working-directory: TMessagesProj/jni
+        run: |
+          export NDK=${ANDROID_SDK_ROOT}/ndk/21.4.7075529
+          export NINJA_PATH=$(which ninja)
+          echo "Building native libs with NDK: $NDK"
+          ./build_libvpx_clang.sh
+          ./build_ffmpeg_clang.sh
+          ./patch_ffmpeg.sh
+          ./patch_boringssl.sh
+          ./build_boringssl.sh
+
+      - name: Prepare gradle.properties
+        run: |
+          echo "Injecting API keys..."
+          echo "APP_ID=${{ secrets.API_ID }}" >> gradle.properties
+          echo "APP_HASH=${{ secrets.API_HASH }}" >> gradle.properties
+
+      - name: Build APK (assembleAfatRelease)
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleAfatRelease
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Telegram-Release-APK
+          path: |
+            TMessagesProj/build/outputs/apk/afat/release/*.apk
+            TMessagesProj/build/outputs/apk/afatFork/release/*.apk
