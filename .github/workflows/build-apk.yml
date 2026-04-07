@@ -15,62 +15,73 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up JDK 21
+      - name: Free up disk space
+        run: |
+          sudo docker image prune --all --force
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIR/dotnet"
+
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
+          java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: Install dependencies
+      - name: Install Native Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gperf meson ninja-build yasm
+          sudo apt-get install -y gperf meson ninja-build yasm unzip python3 python3-pip python3-setuptools
 
-      - name: Setup Android NDK
-        run: |
-          echo "Installing NDK r21e (21.4.7075529)..."
-          echo "y" | sudo ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "ndk;21.4.7075529"
+      - name: Setup NDK r21e
+        uses: nttld/setup-ndk@v1.5.0
+        id: setup-ndk-r21e
+        with:
+          ndk-version: r21e
+          link-to-sdk: true
+
+      - name: Setup NDK r23c
+        uses: nttld/setup-ndk@v1.5.0
+        id: setup-ndk-r23c
+        with:
+          ndk-version: r23c
+          link-to-sdk: true
 
       - name: Setup Build Environment (Dummies)
         run: |
           mkdir -p TMessagesProj/config
           echo "Generating dummy release.keystore..."
+          # Fix for keytool interactivity: use -storepass and -keypass consistently
           keytool -genkey -v -keystore TMessagesProj/config/release.keystore -alias alias -keyalg RSA -keysize 2048 -validity 10000 -dname "cn=Test, ou=Test, o=Test, l=Test, s=Test, c=US" -storepass password -keypass password
           
-          # We already have a placeholder google-services.json in the commit, 
-          # but ensuring it exists here too just in case.
           if [ ! -f TMessagesProj/google-services.json ]; then
             echo "{}" > TMessagesProj/google-services.json
           fi
 
-      - name: Build Native Libraries
-        working-directory: TMessagesProj/jni
-        run: |
-          export NDK=${ANDROID_SDK_ROOT}/ndk/21.4.7075529
-          export NINJA_PATH=$(which ninja)
-          echo "Building native libs with NDK: $NDK"
-          ./build_libvpx_clang.sh
-          ./build_ffmpeg_clang.sh
-          ./patch_ffmpeg.sh
-          ./patch_boringssl.sh
-          ./build_boringssl.sh
-
       - name: Prepare gradle.properties
         run: |
           echo "Injecting API keys..."
-          echo "APP_ID=${{ secrets.API_ID }}" >> gradle.properties
-          echo "APP_HASH=${{ secrets.API_HASH }}" >> gradle.properties
+          vars=gradle.properties
+          echo "APP_ID=${{ secrets.API_ID }}" >> $vars
+          echo "APP_HASH=${{ secrets.API_HASH }}" >> $vars
+          # Add passwords for dummy keystore to satisfy Gradle
+          echo "RELEASE_KEY_PASSWORD=password" >> $vars
+          echo "RELEASE_KEY_ALIAS=alias" >> $vars
+          echo "RELEASE_STORE_PASSWORD=password" >> $vars
+          # Forkgram specific flags
+          echo "org.gradle.workers.max=1" >> $vars
 
-      - name: Build APK (assembleAfatRelease)
+      - name: Build APK (:TMessagesProj_App:assembleAfatRelease)
         run: |
           chmod +x gradlew
-          ./gradlew assembleAfatRelease
+          ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Telegram-Release-APK
           path: |
+            TMessagesProj_App/build/outputs/apk/afat/release/*.apk
             TMessagesProj/build/outputs/apk/afat/release/*.apk
-            TMessagesProj/build/outputs/apk/afatFork/release/*.apk
+            TMessagesProj/build/outputs/apk/*/release/*.apk
