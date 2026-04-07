@@ -74,8 +74,11 @@ jobs:
           cp gradle.properties TMessagesProj/
           cp gradle.properties TMessagesProj_App/
 
-          # Generate dummy keystore
+          # Clean up any existing keystore to avoid keytool password conflict
           mkdir -p TMessagesProj/config
+          rm -f TMessagesProj/config/release.keystore
+          
+          # Generate dummy keystore
           keytool -genkey -v -keystore TMessagesProj/config/release.keystore -alias tg-x-lora -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=Telegram, O=XLora, C=US"
 
       - name: Build APK
