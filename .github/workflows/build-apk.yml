@@ -15,6 +15,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
 
       - name: Free up disk space
         uses: jlumbroso/free-disk-space@v1.3.1
@@ -39,25 +40,9 @@ jobs:
           ndk-version: r21e
           link-to-sdk: true
 
-      - name: Set up NDK r23c
-        uses: nttld/setup-ndk@v1.4.2
-        with:
-          ndk-version: r23c
-          link-to-sdk: true
-
       - name: Prepare Build Environment
         run: |
-          # Generate dummy google-services.json
-          mkdir -p TMessagesProj
-          cat <<EOF > TMessagesProj/google-services.json
-          {
-            "project_info": { "project_number": "123456789", "project_id": "dummy-id" },
-            "client": [ { "client_info": { "mobilesdk_app_id": "1:123456789:android:dummy", "android_client_info": { "package_name": "org.forkclient.messenger" } } } ],
-            "configuration_version": "1"
-          }
-          EOF
-
-          # Configure gradle.properties
+          # Configure gradle.properties (Root level)
           vars=gradle.properties
           echo "DUMMY_CONST=0" >> $vars
           echo "org.gradle.workers.max=1" >> $vars
@@ -70,12 +55,29 @@ jobs:
           echo "USER_REPO=$GITHUB_REPOSITORY" >> $vars
           echo "CHECK_UPDATES=1" >> $vars
           echo "VERSION_NUM=7" >> $vars
+          
+          # Inherit to submodules just in case
+          cp gradle.properties TMessagesProj/
+          cp gradle.properties TMessagesProj_App/
 
-          # Generate dummy keystore if not exists
+          # Generate dummy google-services.json
+          mkdir -p TMessagesProj
+          cat <<EOF > TMessagesProj/google-services.json
+          {
+            "project_info": { "project_number": "123456789", "project_id": "dummy-id" },
+            "client": [ { "client_info": { "mobilesdk_app_id": "1:123456789:android:dummy", "android_client_info": { "package_name": "org.forkclient.messenger" } } } ],
+            "configuration_version": "1"
+          }
+          EOF
+
+          # Generate dummy keystore
           mkdir -p TMessagesProj/config
           keytool -genkey -v -keystore TMessagesProj/config/release.keystore -alias tg-x-lora -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=Telegram, O=XLora, C=US"
 
       - name: Build APK
+        env:
+          MAKEFLAGS: "-j1"
+          COMPILATION_PROC_COUNT: "1"
         run: ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace
 
       - name: Upload APK
