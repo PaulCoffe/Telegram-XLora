@@ -7,11 +7,11 @@
 
 ## CI/CD Pipeline (GitHub Actions)
 - **Goal**: Automated Assembly of the Release APK.
-- **Environment**: Ubuntu Latest, JDK 21, NDK r21e.
-- **Native Build**: FFmpeg, VPX, BoringSSL within `TMessagesProj/jni`.
+- **Environment**: Ubuntu Latest, JDK 17, NDK r21e + r23c.
+- **Native Build**: FFmpeg, VPX, BoringSSL within `TMessagesProj/jni` (built via shell scripts before APK assembly).
 - **Secrets Management**:
-  - `API_ID`: GitHub Secret.
-  - `API_HASH`: GitHub Secret.
+  - `API_ID`: GitHub Secret (fallback to dummy '12345').
+  - `API_HASH`: GitHub Secret (fallback to dummy 'abcdef0123456789').
 
 ## LoRa Mesh Integration (MeshCore)
 The mesh system is integrated as a transport layer below `SendMessagesHelper`.
