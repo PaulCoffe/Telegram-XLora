@@ -3,10 +3,17 @@
 set -e
 
 
-if [[ -z "${ANDROID_SDK}" ]]; then
+if command -v cmake > /dev/null; then
    cmakePath=""
+elif [[ -n "${ANDROID_SDK}" ]]; then
+   foundCmake=`find ${ANDROID_SDK}/cmake -executable -type f -name cmake | head -n 1`
+   if [[ -n "$foundCmake" ]]; then
+       cmakePath="$(dirname "$foundCmake")/"
+   else
+       cmakePath=""
+   fi
 else
-   cmakePath=`find ${ANDROID_SDK}/cmake -executable -type f | grep cmake$ | head -n 1`/
+   cmakePath=""
 fi
 
 function build_one {
