@@ -86,6 +86,10 @@ jobs:
           
           "$SDK_MANAGER" "cmake;3.22.1"
           
+          # Fix for BoringSSL build: export Ninja path
+          export NINJA_PATH=$(which ninja)
+          export ANDROID_SDK="$ANDROID_HOME"
+          
           cd TMessagesProj/jni
           if [ "${{ steps.cache-native.outputs.cache-hit }}" != 'true' ]; then
             ./build_libvpx_clang.sh arm64

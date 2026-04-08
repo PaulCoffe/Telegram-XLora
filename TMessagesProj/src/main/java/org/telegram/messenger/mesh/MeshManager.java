@@ -115,21 +115,21 @@ public class MeshManager {
         
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter == null || !adapter.isEnabled()) {
-            FileLog.e(TAG, "Bluetooth not available or disabled");
+            FileLog.e(TAG + ": Bluetooth not available or disabled");
             return;
         }
 
         // Permission check for Android 12+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ContextCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
-                FileLog.e(TAG, "Missing BLUETOOTH_SCAN permission");
+            if (ActivityCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                FileLog.e(TAG + ": Missing BLUETOOTH_SCAN permission");
                 return;
             }
         }
 
         final BluetoothLeScanner scanner = adapter.getBluetoothLeScanner();
         if (scanner == null) {
-            FileLog.e(TAG, "Failed to get LE Scanner");
+            FileLog.e(TAG + ": Failed to get LE Scanner");
             return;
         }
 
@@ -137,9 +137,9 @@ public class MeshManager {
             isScanning = true;
             foundDevices.clear();
             scanner.startScan(scanCallback);
-            FileLog.d(TAG, "Scan started successfully");
+            FileLog.d(TAG + ": Scan started successfully");
         } catch (Exception e) {
-            FileLog.e(TAG, "Exception starting scan: " + e.getMessage());
+            FileLog.e(TAG + ": Exception starting scan: " + e.getMessage());
             isScanning = false;
             return;
         }
@@ -155,13 +155,13 @@ public class MeshManager {
             try {
                 // Permission check for Android 12+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    if (ContextCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                    if (ActivityCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
                         return;
                     }
                 }
                 adapter.getBluetoothLeScanner().stopScan(scanCallback);
             } catch (Exception e) {
-                FileLog.e(TAG, "Error stopping scan: " + e.getMessage());
+                FileLog.e(TAG + ": Error stopping scan: " + e.getMessage());
             }
         }
         isScanning = false;
@@ -234,14 +234,14 @@ public class MeshManager {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                FileLog.d(TAG, "GATT Connected, discovering services...");
+                FileLog.d(TAG + ": GATT Connected, discovering services...");
                 isConnected = true;
                 if (listener != null) {
                     handler.post(() -> listener.onConnectionStateChanged(true));
                 }
                 gatt.discoverServices();
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                FileLog.d(TAG, "GATT Disconnected");
+                FileLog.d(TAG + ": GATT Disconnected");
                 isConnected = false;
                 if (listener != null) {
                     handler.post(() -> listener.onConnectionStateChanged(false));
@@ -259,11 +259,11 @@ public class MeshManager {
                     BluetoothGattCharacteristic tx = service.getCharacteristic(TX_CHARACTERISTIC_UUID);
                     if (tx != null) {
                         gatt.setCharacteristicNotification(tx, true);
-                        FileLog.d(TAG, "UART Service configured, RX/TX ready");
+                        FileLog.d(TAG + ": UART Service configured, RX/TX ready");
                     }
                 }
             } else {
-                FileLog.e(TAG, "Service discovery failed with status: " + status);
+                FileLog.e(TAG + ": Service discovery failed with status: " + status);
             }
         }
 
@@ -357,8 +357,7 @@ public class MeshManager {
     }
 
     private void handleMeshMessage(String text) {
-        // Acting as a bridge/gateway or local handler
-        FileLog.d(TAG, "Received Mesh Message: " + text);
+        FileLog.d(TAG + ": Received Mesh Message: " + text);
         
         // Scenario 2: If it's a message from a node, we should notify the UI
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.didReceiveSmsCode, text); // Placeholder for generic data broadcast
@@ -371,7 +370,7 @@ public class MeshManager {
 
     public void syncHistory() {
         if (!isConnected) return;
-        FileLog.d(TAG, "MeshManager: Starting history sync from node...");
+        FileLog.d(TAG + ": MeshManager: Starting history sync from node...");
         // Send a request to pull history from node buffer
         // MeshCore CMD_FETCH_HISTORY (Example: 0x01 command byte)
         byte[] fetchCmd = new byte[] { 0x01 }; 
