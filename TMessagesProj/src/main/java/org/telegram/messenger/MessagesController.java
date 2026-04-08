@@ -140,6 +140,8 @@ public class MessagesController extends BaseController implements NotificationCe
     private final ConcurrentHashMap<String, TLObject> objectsByUsernames = new ConcurrentHashMap<>(100, 1.0f, 2);
     private final ConcurrentHashMap<Long, Long> monoForumLinkedChannels = new ConcurrentHashMap<>(3, 1.0f, 2);
     public static int stableIdPointer = 100;
+    public static final int MESH_FILTER_ID = 1492;
+
 
     private final HashMap<Long, TLRPC.Chat> activeVoiceChatsMap = new HashMap<>();
 
@@ -268,6 +270,25 @@ public class MessagesController extends BaseController implements NotificationCe
     public SparseIntArray businessFeaturesTypesToPosition = new SparseIntArray();
     
     public ArrayList<DialogFilter> dialogFilters = new ArrayList<>();
+
+    public void checkMeshFilter() {
+        if (!org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled()) {
+            return;
+        }
+        for (int a = 0, N = dialogFilters.size(); a < N; a++) {
+            if (dialogFilters.get(a).id == MESH_FILTER_ID) {
+                return;
+            }
+        }
+        TLRPC.TL_dialogFilter meshFilter = new TLRPC.TL_dialogFilter();
+        meshFilter.id = MESH_FILTER_ID;
+        meshFilter.title = new TLRPC.TL_textWithEntities();
+        meshFilter.title.text = "Mesh";
+        meshFilter.order = dialogFilters.size();
+        dialogFilters.add(meshFilter);
+        dialogFiltersById.put(meshFilter.id, meshFilter);
+    }
+
     public ArrayList<DialogFilter> frozenDialogFilters = null;
     public ArrayList<Long> hiddenUndoChats = new ArrayList<>();
     public SparseArray<DialogFilter> dialogFiltersById = new SparseArray<>();
@@ -2229,6 +2250,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     putChats(chats, true);
                     dialogFiltersLoaded = true;
                     getNotificationCenter().postNotificationName(NotificationCenter.dialogFiltersUpdated);
+                    checkMeshFilter();
                     if (remote == 0) {
                         loadRemoteFilters(false);
                     }

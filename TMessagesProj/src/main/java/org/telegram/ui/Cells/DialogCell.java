@@ -1177,7 +1177,20 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         CharSequence messageNameString = null;
         CharSequence printingString = null;
         CharSequence buttonString = null;
-        if (!isForumCell() && (isDialogCell || isTopic)) {
+        org.telegram.messenger.mesh.MeshDialog meshDialog = null;
+        if (isDialogCell) {
+            TLRPC.Dialog dialog = MessagesController.getInstance(currentAccount).dialogs_dict.get(currentDialogId);
+            if (dialog instanceof org.telegram.messenger.mesh.MeshDialog) {
+                meshDialog = (org.telegram.messenger.mesh.MeshDialog) dialog;
+            }
+        }
+
+        if (meshDialog != null) {
+            nameString = meshDialog.meshName;
+            messageString = meshDialog.lastMessage != null ? meshDialog.lastMessage : "";
+            drawTime = false;
+            showChecks = false;
+        } else if (!isForumCell() && (isDialogCell || isTopic)) {
             printingString = MessagesController.getInstance(currentAccount).getPrintingString(currentDialogId, getTopicId(), true);
         }
         currentMessagePaint = Theme.dialogs_messagePaint[paintIndex];

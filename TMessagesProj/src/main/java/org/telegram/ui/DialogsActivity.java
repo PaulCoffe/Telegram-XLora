@@ -7834,6 +7834,15 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     return;
                 }
                 dialogId = dialog.id;
+                if (dialogId <= -2000000000L) {
+                    long meshHash = -(dialogId + 2000000000L);
+                    org.telegram.ui.ActionBar.AlertDialog.Builder builder = new org.telegram.ui.ActionBar.AlertDialog.Builder(getParentActivity());
+                    builder.setTitle("Mesh Channel");
+                    builder.setMessage("This is an offline MeshCore channel (Hash: " + meshHash + ").\n\nFull chat integration is in progress.");
+                    builder.setPositiveButton(org.telegram.messenger.LocaleController.getString("OK", org.telegram.messenger.R.string.OK), null);
+                    showDialog(builder.create());
+                    return;
+                }
                 if (actionBar.isActionModeShowed(null)) {
                     showOrUpdateActionMode(dialogId, view);
                     return;
@@ -10841,6 +10850,28 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             MessagesController.DialogFilter dialogFilter = messagesController.selectedDialogFilter[dialogsType == 7 ? 0 : 1];
             if (dialogFilter == null) {
                 return messagesController.getDialogs(folderId);
+            } else if (dialogFilter.id == MessagesController.MESH_FILTER_ID) {
+                ArrayList<TLRPC.Dialog> meshDialogs = new ArrayList<>();
+                ArrayList<org.telegram.messenger.mesh.MeshStorage.MeshChannel> channels = org.telegram.messenger.mesh.MeshStorage.getInstance().getChannels();
+                for (org.telegram.messenger.mesh.MeshStorage.MeshChannel channel : channels) {
+                    org.telegram.messenger.mesh.MeshDialog meshDialog = new org.telegram.messenger.mesh.MeshDialog();
+                    meshDialog.id = - (2000000000L + channel.hash); // Unique negative ID range for Mesh
+                    meshDialog.top_message = 0;
+                    meshDialog.unread_count = 0; // TODO: Implement unread count
+                    meshDialog.meshName = channel.name;
+                    meshDialog.lastMessage = org.telegram.messenger.mesh.MeshStorage.getInstance().getLastMessage(channel.hash);
+                    meshDialogs.add(meshDialog);
+
+                    // Cache the dialog so DialogCell can find it
+                    messagesController.dialogs_dict.put(meshDialog.id, meshDialog);
+
+                    // Create/update mock chat for name display
+                    TLRPC.TL_chat chat = new TLRPC.TL_chat();
+                    chat.id = meshDialog.id; // Matches dialog ID
+                    chat.title = channel.name;
+                    messagesController.putChat(chat, false);
+                }
+                return meshDialogs;
             } else {
                 if (initialDialogsType == DIALOGS_TYPE_FORWARD) {
                     return dialogFilter.dialogsForward;

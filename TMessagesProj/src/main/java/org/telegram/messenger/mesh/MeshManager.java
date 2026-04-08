@@ -20,11 +20,16 @@ import androidx.core.content.ContextCompat;
 
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.TLRPC;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -292,64 +297,87 @@ public class MeshManager {
         }
     }
 
-    private void processIncomingPacket(byte[] encryptedData) {
+    public void sendData(byte[] data) {
+        sendData(data, 0);
+    }
+
+    public void sendData(byte[] data, int targetNodeHash) {
+        if (rxCharacteristic == null || bluetoothGatt == null) return;
+
         try {
-            byte[] decrypted = decrypt(encryptedData);
-            if (decrypted == null) {
-                return;
+            int[] path = (targetNodeHash != 0) ? new int[]{targetNodeHash} : null;
+            byte type = (targetNodeHash != 0) ? MeshProtocol.TYPE_TXT_MSG : MeshProtocol.TYPE_GRP_TXT;
+            
+            MeshProtocol.Packet packet = new MeshProtocol.Packet(type, path, data);
+            byte[] rawPacket = packet.serialize();
+            
+            byte[] encrypted = encrypt(rawPacket);
+            List<MeshFragmenter.Fragment> fragments = fragmenter.fragment(encrypted, (int) (System.currentTimeMillis() / 1000));
+
+            for (MeshFragmenter.Fragment frag : fragments) {
+                writeQueue.add(frag.serialize());
             }
-            byte[] assembled = fragmenter.onFragmentReceived(decrypted);
-            if (assembled != null) {
-                String messageText = new String(assembled);
-                handleMeshMessage(messageText);
+
+            if (!isWriting) {
+                processWriteQueue();
             }
+            
+            // Save to local history (using 0 as default channel/chat ID for broadcast)
+            MeshStorage.getInstance().saveMessage(0, targetNodeHash, new String(data), true);
         } catch (Exception e) {
             FileLog.e(e);
         }
     }
 
-    public void onNetworkStatusChanged(boolean online) {
-        if (online) {
-            FileLog.d("MeshManager: Network is online, starting gateway checks.");
-            // Here we would scan for pending messages in a mesh-specific queue
-        } else {
-            FileLog.d("MeshManager: Network is offline, relying on mesh transport.");
+    private void processIncomingPacket(byte[] encryptedData) {
+        try {
+            byte[] decrypted = decrypt(encryptedData);
+            if (decrypted == null) return;
+
+            byte[] assembled = fragmenter.onFragmentReceived(decrypted);
+            if (assembled != null) {
+                MeshProtocol.Packet packet = MeshProtocol.Packet.deserialize(assembled);
+                if (packet == null) return;
+
+                if (packet.type == MeshProtocol.TYPE_TXT_MSG || packet.type == MeshProtocol.TYPE_GRP_TXT) {
+                    String messageText = new String(packet.payload);
+                    int senderHash = (packet.path != null && packet.path.length > 0) ? packet.path[packet.path.length - 1] : 0;
+                    
+                    // Save to local storage
+                    MeshStorage.getInstance().saveMessage(0, senderHash, messageText, false);
+                    
+                    handleMeshMessage(messageText);
+                } else if (packet.type == MeshProtocol.TYPE_REQ) {
+                    // Handle history requests or node info requests
+                }
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
         }
     }
 
     private void handleMeshMessage(String text) {
-        // Simple protocol check: if text starts with "RELAY:", it's for someone else.
-        if (text.startsWith("RELAY:")) {
-            if (ApplicationLoader.isNetworkOnline()) {
-                String payload = text.substring(6);
-                FileLog.d("MeshManager: Acting as Gateway. Relaying: " + payload);
-                // In a future version, payload would contain destination info.
-            } else {
-                FileLog.d("MeshManager: Received relay request but we are offline. Dropping or re-broadcast.");
-            }
-        } else {
-            // It's a message for us.
-            FileLog.d("MeshManager: Received Direct Message: " + text);
-            // TODO: Inject into MessagesController or show as a pseudo-notification.
+        // Acting as a bridge/gateway or local handler
+        FileLog.d(TAG, "Received Mesh Message: " + text);
+        
+        // Scenario 2: If it's a message from a node, we should notify the UI
+        NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.didReceiveSmsCode, text); // Placeholder for generic data broadcast
+        
+        // Relay logic for Gateway Mode
+        if (ApplicationLoader.isNetworkOnline()) {
+             // In Gateway Mode, if we receive a message intended for high-level relay, we send it to TG servers
         }
     }
 
-    public void sendData(byte[] data) {
-        if (rxCharacteristic == null || bluetoothGatt == null) {
-            FileLog.e(TAG, "Cannot send data: RX characteristic not found or GATT not connected");
-            return;
-        }
-
-        try {
-            byte[] encrypted = encrypt(data);
-            List<MeshFragmenter.Fragment> fragments = fragmenter.fragment(encrypted, (int) System.currentTimeMillis());
-            for (MeshFragmenter.Fragment f : fragments) {
-                writeQueue.add(f.serialize());
-            }
-            processWriteQueue();
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
+    public void syncHistory() {
+        if (!isConnected) return;
+        FileLog.d(TAG, "MeshManager: Starting history sync from node...");
+        // Send a request to pull history from node buffer
+        // MeshCore CMD_FETCH_HISTORY (Example: 0x01 command byte)
+        byte[] fetchCmd = new byte[] { 0x01 }; 
+        MeshProtocol.Packet packet = new MeshProtocol.Packet(MeshProtocol.TYPE_REQ, null, fetchCmd);
+        writeQueue.add(packet.serialize());
+        processWriteQueue();
     }
 
     private byte[] encrypt(byte[] data) throws Exception {
