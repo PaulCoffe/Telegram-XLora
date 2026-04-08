@@ -4,6 +4,10 @@
 - **Base Project**: forkgram/TelegramAndroid (Official Forkgram).
 - **Language**: Java / C++.
 - **Platform**: Android.
+- **Core Modules**:
+  - `:TMessagesProj`: The main Telegram logic and JNI.
+  - `:TMessagesProj_App`: The primary application module for assembly.
+  *(All other app variations have been removed for simplicity).*
 
 ## CI/CD Pipeline (GitHub Actions)
 - **Goal**: Automated Assembly of the Release APK.

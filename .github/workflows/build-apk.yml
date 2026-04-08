@@ -71,7 +71,7 @@ jobs:
             exit 1
           fi
           
-          "$SDK_MANAGER" "cmake;3.22.1" --sdk_root "$ANDROID_HOME"
+          "$SDK_MANAGER" "cmake;3.22.1"
           
           cd TMessagesProj/jni
           ./build_libvpx_clang.sh
