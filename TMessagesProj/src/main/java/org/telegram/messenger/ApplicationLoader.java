@@ -319,9 +319,13 @@ public class ApplicationLoader extends Application {
 
         applicationHandler = new Handler(applicationContext.getMainLooper());
 
-        org.telegram.messenger.mesh.MeshTransportManager.getInstance();
-        if (org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled()) {
-            org.telegram.messenger.mesh.MeshManager.getInstance().startScanning();
+        try {
+            org.telegram.messenger.mesh.MeshTransportManager.getInstance();
+            if (org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled()) {
+                org.telegram.messenger.mesh.MeshManager.getInstance().startScanningIfPermissionsGranted();
+            }
+        } catch (Throwable e) {
+            FileLog.e("MeshInit", e);
         }
 
         AndroidUtilities.runOnUIThread(ApplicationLoader::startPushService);

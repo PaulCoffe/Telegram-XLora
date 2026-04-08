@@ -11,8 +11,12 @@ import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
 import android.content.Context;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import androidx.core.content.ContextCompat;
 
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
@@ -22,6 +26,7 @@ import org.telegram.tgnet.TLRPC;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
@@ -37,8 +42,8 @@ public class MeshManager {
 
     // Nordic UART Service UUIDs
     private static final UUID UART_SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e");
-    private static final UUID TX_CHARACTERISTIC_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e");
-    private static final UUID RX_CHARACTERISTIC_UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e");
+    private static final UUID RX_CHARACTERISTIC_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e"); // Write
+    private static final UUID TX_CHARACTERISTIC_UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"); // Notify
 
     // MeshCore AES-256 PSK (32 bytes).
     private static final byte[] MESH_PSK = new byte[] {
@@ -50,8 +55,23 @@ public class MeshManager {
     
     private final MeshFragmenter fragmenter = new MeshFragmenter();
     private BluetoothGatt bluetoothGatt;
-    private BluetoothGattCharacteristic txCharacteristic;
+    private BluetoothGattCharacteristic rxCharacteristic; // Phone writes to this
     private boolean isScanning = false;
+    private boolean isConnected = false;
+    private final ConcurrentLinkedQueue<byte[]> writeQueue = new ConcurrentLinkedQueue<>();
+    private boolean isWriting = false;
+    public interface MeshManagerListener {
+        void onDevicesUpdated();
+        void onConnectionStateChanged(boolean connected);
+        void onMessageReceived(byte[] data);
+    }
+
+    private MeshManagerListener listener;
+
+    public void setListener(MeshManagerListener listener) {
+        this.listener = listener;
+    }
+
     private final java.util.ArrayList<BluetoothDevice> foundDevices = new java.util.ArrayList<>();
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -70,17 +90,54 @@ public class MeshManager {
 
     private MeshManager() {}
 
+    public void startScanningIfPermissionsGranted() {
+        if (ApplicationLoader.applicationContext != null) {
+            boolean granted;
+            if (Build.VERSION.SDK_INT >= 31) {
+                granted = ContextCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
+                          ContextCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
+            } else {
+                granted = ContextCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            }
+            if (granted) {
+                startScanning();
+            }
+        }
+    }
+
     public void startScanning() {
         if (isScanning) return;
+        
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-        if (adapter == null || !adapter.isEnabled()) return;
+        if (adapter == null || !adapter.isEnabled()) {
+            FileLog.e(TAG, "Bluetooth not available or disabled");
+            return;
+        }
+
+        // Permission check for Android 12+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (ContextCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                FileLog.e(TAG, "Missing BLUETOOTH_SCAN permission");
+                return;
+            }
+        }
 
         final BluetoothLeScanner scanner = adapter.getBluetoothLeScanner();
-        if (scanner == null) return;
+        if (scanner == null) {
+            FileLog.e(TAG, "Failed to get LE Scanner");
+            return;
+        }
 
-        isScanning = true;
-        foundDevices.clear();
-        scanner.startScan(scanCallback);
+        try {
+            isScanning = true;
+            foundDevices.clear();
+            scanner.startScan(scanCallback);
+            FileLog.d(TAG, "Scan started successfully");
+        } catch (Exception e) {
+            FileLog.e(TAG, "Exception starting scan: " + e.getMessage());
+            isScanning = false;
+            return;
+        }
         
         // Stop scanning after 30 seconds
         handler.postDelayed(() -> stopScanning(), 30000);
@@ -90,7 +147,17 @@ public class MeshManager {
         if (!isScanning) return;
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter != null && adapter.getBluetoothLeScanner() != null) {
-            adapter.getBluetoothLeScanner().stopScan(scanCallback);
+            try {
+                // Permission check for Android 12+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (ContextCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                        return;
+                    }
+                }
+                adapter.getBluetoothLeScanner().stopScan(scanCallback);
+            } catch (Exception e) {
+                FileLog.e(TAG, "Error stopping scan: " + e.getMessage());
+            }
         }
         isScanning = false;
     }
@@ -109,6 +176,9 @@ public class MeshManager {
                 }
                 if (!exists) {
                     foundDevices.add(device);
+                    if (listener != null) {
+                        handler.post(() -> listener.onDevicesUpdated());
+                    }
                 }
             }
             
@@ -159,7 +229,19 @@ public class MeshManager {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
+                FileLog.d(TAG, "GATT Connected, discovering services...");
+                isConnected = true;
+                if (listener != null) {
+                    handler.post(() -> listener.onConnectionStateChanged(true));
+                }
                 gatt.discoverServices();
+            } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                FileLog.d(TAG, "GATT Disconnected");
+                isConnected = false;
+                if (listener != null) {
+                    handler.post(() -> listener.onConnectionStateChanged(false));
+                }
+                rxCharacteristic = null;
             }
         }
 
@@ -168,24 +250,54 @@ public class MeshManager {
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 BluetoothGattService service = gatt.getService(UART_SERVICE_UUID);
                 if (service != null) {
-                    txCharacteristic = service.getCharacteristic(TX_CHARACTERISTIC_UUID);
-                    BluetoothGattCharacteristic rx = service.getCharacteristic(RX_CHARACTERISTIC_UUID);
-                    gatt.setCharacteristicNotification(rx, true);
+                    rxCharacteristic = service.getCharacteristic(RX_CHARACTERISTIC_UUID);
+                    BluetoothGattCharacteristic tx = service.getCharacteristic(TX_CHARACTERISTIC_UUID);
+                    if (tx != null) {
+                        gatt.setCharacteristicNotification(tx, true);
+                        FileLog.d(TAG, "UART Service configured, RX/TX ready");
+                    }
                 }
+            } else {
+                FileLog.e(TAG, "Service discovery failed with status: " + status);
             }
         }
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            if (characteristic.getUuid().equals(RX_CHARACTERISTIC_UUID)) {
-                processIncomingPacket(characteristic.getValue());
+            if (characteristic.getUuid().equals(TX_CHARACTERISTIC_UUID)) {
+                byte[] data = characteristic.getValue();
+                if (listener != null) {
+                    handler.post(() -> listener.onMessageReceived(data));
+                }
+                processIncomingPacket(data);
             }
         }
+
+        @Override
+        public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+            isWriting = false;
+            processWriteQueue();
+        }
     };
+
+    private synchronized void processWriteQueue() {
+        if (isWriting || writeQueue.isEmpty() || rxCharacteristic == null || bluetoothGatt == null) {
+            return;
+        }
+        byte[] nextPacket = writeQueue.poll();
+        if (nextPacket != null) {
+            isWriting = true;
+            rxCharacteristic.setValue(nextPacket);
+            bluetoothGatt.writeCharacteristic(rxCharacteristic);
+        }
+    }
 
     private void processIncomingPacket(byte[] encryptedData) {
         try {
             byte[] decrypted = decrypt(encryptedData);
+            if (decrypted == null) {
+                return;
+            }
             byte[] assembled = fragmenter.onFragmentReceived(decrypted);
             if (assembled != null) {
                 String messageText = new String(assembled);
@@ -223,17 +335,18 @@ public class MeshManager {
     }
 
     public void sendData(byte[] data) {
-        if (txCharacteristic == null || bluetoothGatt == null) return;
+        if (rxCharacteristic == null || bluetoothGatt == null) {
+            FileLog.e(TAG, "Cannot send data: RX characteristic not found or GATT not connected");
+            return;
+        }
 
         try {
             byte[] encrypted = encrypt(data);
             List<MeshFragmenter.Fragment> fragments = fragmenter.fragment(encrypted, (int) System.currentTimeMillis());
             for (MeshFragmenter.Fragment f : fragments) {
-                txCharacteristic.setValue(f.serialize());
-                bluetoothGatt.writeCharacteristic(txCharacteristic);
-                // BLE write is usually async, in production we should wait for onCharacteristicWrite
-                Thread.sleep(50); 
+                writeQueue.add(f.serialize());
             }
+            processWriteQueue();
         } catch (Exception e) {
             FileLog.e(e);
         }

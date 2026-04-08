@@ -100,6 +100,7 @@ public class MeshFragmenter {
     }
 
     public byte[] onFragmentReceived(byte[] raw) {
+        if (raw == null) return null;
         cleanStaleBuffers();
         Fragment frag = Fragment.deserialize(raw);
         if (frag == null) return null;
