@@ -50,16 +50,29 @@ jobs:
 
       - name: Build Native Dependencies
         run: |
-          export NDK=${{ steps.setup-ndk-r21e.outputs.ndk-path }}
-          export NINJA_PATH=/usr/bin/ninja
-          export ANDROID_SDK=$ANDROID_HOME
-          export ANDROID_HOME=$ANDROID_HOME
-          # Locate sdkmanager (Path varies on Ubuntu runners)
-          SDK_MANAGER=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
-          if [ ! -f "$SDK_MANAGER" ]; then
-            SDK_MANAGER=$ANDROID_HOME/tools/bin/sdkmanager
+          set -ex
+          # Use NDK provided by setup-ndk action
+          export ANDROID_NDK_HOME="${{ steps.setup-ndk-r21e.outputs.ndk-path }}"
+          export NDK="$ANDROID_NDK_HOME"
+          
+          # Ensure ANDROID_HOME is set (default for GitHub Runners)
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK="$ANDROID_HOME"
+          
+          # Find sdkmanager
+          if command -v sdkmanager > /dev/null; then
+            SDK_MANAGER="sdkmanager"
+          elif [ -f "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDK_MANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -f "$ANDROID_HOME/tools/bin/sdkmanager" ]; then
+            SDK_MANAGER="$ANDROID_HOME/tools/bin/sdkmanager"
+          else
+            echo "Error: sdkmanager not found"
+            exit 1
           fi
+          
           "$SDK_MANAGER" "cmake;3.22.1" --sdk_root "$ANDROID_HOME"
+          
           cd TMessagesProj/jni
           ./build_libvpx_clang.sh
           ./build_ffmpeg_clang.sh
