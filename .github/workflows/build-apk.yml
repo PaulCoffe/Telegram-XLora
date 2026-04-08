@@ -54,7 +54,12 @@ jobs:
           export NINJA_PATH=/usr/bin/ninja
           export ANDROID_SDK=$ANDROID_HOME
           export ANDROID_HOME=$ANDROID_HOME
-          sdkmanager "cmake;3.22.1" --sdk_root $ANDROID_HOME
+          # Locate sdkmanager (Path varies on Ubuntu runners)
+          SDK_MANAGER=$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
+          if [ ! -f "$SDK_MANAGER" ]; then
+            SDK_MANAGER=$ANDROID_HOME/tools/bin/sdkmanager
+          fi
+          "$SDK_MANAGER" "cmake;3.22.1" --sdk_root "$ANDROID_HOME"
           cd TMessagesProj/jni
           ./build_libvpx_clang.sh
           ./build_ffmpeg_clang.sh
