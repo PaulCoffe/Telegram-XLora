@@ -1,5 +1,20 @@
 # DEVELOPMENT HISTORY
 
+## [2026-04-08] Phase: Build Speed Optimization
+Focused on reducing iteration time for rapid prototyping on Samsung S25 (Android 16).
+
+### Improvements
+1. **Parallelism Restored**: Removed `-j1` and `org.gradle.workers.max=1` limitations. Enabled `org.gradle.parallel=true`.
+2. **Deep Caching**:
+   - Implemented `actions/cache` for pre-built Native Libraries (FFmpeg, libvpx, BoringSSL).
+   - Enabled Gradle caching in `setup-java`.
+3. **Architecture Targeting**:
+   - Native scripts now only build for `arm64-v8a`.
+   - Gradle task switched to `:TMessagesProj_App:assembleAfatFd_v8aRelease`.
+   - Result: Much smaller APK and significantly faster CI builds (~4x speedup expected).
+
+---
+
 ## [2026-04-08] Phase: LoRa Mesh Stabilization (mesh-dev)
 
 ### Context & Problem

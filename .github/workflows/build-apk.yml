@@ -28,6 +28,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: 'gradle'
 
       - name: Install Native Build Tools
         run: |
@@ -47,6 +48,18 @@ jobs:
         with:
           ndk-version: r23c
           link-to-sdk: true
+
+      - name: Cache Native Libraries
+        id: cache-native
+        uses: actions/cache@v4
+        with:
+          path: |
+            TMessagesProj/jni/ffmpeg/ffmpeg/build
+            TMessagesProj/jni/libvpx/libvpx/build
+            TMessagesProj/jni/boringssl/boringssl/build
+          key: native-libs-arm64-${{ runner.os }}-${{ hashFiles('TMessagesProj/jni/*.sh') }}
+          restore-keys: |
+            native-libs-arm64-${{ runner.os }}-
 
       - name: Build Native Dependencies
         run: |
@@ -74,11 +87,15 @@ jobs:
           "$SDK_MANAGER" "cmake;3.22.1"
           
           cd TMessagesProj/jni
-          ./build_libvpx_clang.sh
-          ./build_ffmpeg_clang.sh
-          ./patch_ffmpeg.sh
-          ./patch_boringssl.sh
-          ./build_boringssl.sh
+          if [ "${{ steps.cache-native.outputs.cache-hit }}" != 'true' ]; then
+            ./build_libvpx_clang.sh arm64
+            ./build_ffmpeg_clang.sh arm64
+            ./patch_ffmpeg.sh
+            ./patch_boringssl.sh
+            ./build_boringssl.sh arm64
+          else
+            echo "Native libraries restored from cache."
+          fi
 
       - name: Prepare Build Environment
         run: |
@@ -107,6 +124,10 @@ jobs:
           cat gradle.properties >> TMessagesProj/gradle.properties
           cat gradle.properties >> TMessagesProj_App/gradle.properties
 
+          # Enable parallel builds in gradle.properties
+          echo "org.gradle.parallel=true" >> TMessagesProj/gradle.properties
+          echo "org.gradle.parallel=true" >> TMessagesProj_App/gradle.properties
+
           # Clean up any existing keystore to avoid keytool password conflict
           mkdir -p TMessagesProj/config
           rm -f TMessagesProj/config/release.keystore
@@ -115,13 +136,10 @@ jobs:
           keytool -genkey -v -keystore TMessagesProj/config/release.keystore -alias tg-x-lora -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=Telegram, O=XLora, C=US"
 
       - name: Build APK
-        env:
-          MAKEFLAGS: "-j1"
-          COMPILATION_PROC_COUNT: "1"
-        run: ./gradlew :TMessagesProj_App:assembleAfatRelease --stacktrace
+        run: ./gradlew :TMessagesProj_App:assembleAfatFd_v8aRelease --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Telegram-XLora-Release
-          path: TMessagesProj_App/build/outputs/apk/afat/release/*.apk
+          path: TMessagesProj_App/build/outputs/apk/afatFd_v8a/release/*.apk
