@@ -70,9 +70,9 @@ jobs:
           echo "LASTFM_API_SECRET=null" >> $vars
           echo "IS_PRIVATE=false" >> $vars
           
-          # Inherit to submodules
-          cp gradle.properties TMessagesProj/
-          cp gradle.properties TMessagesProj_App/
+          # Append to submodules instead of overwriting to preserve module-specific properties
+          cat gradle.properties >> TMessagesProj/gradle.properties
+          cat gradle.properties >> TMessagesProj_App/gradle.properties
 
           # Clean up any existing keystore to avoid keytool password conflict
           mkdir -p TMessagesProj/config
