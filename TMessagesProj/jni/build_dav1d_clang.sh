@@ -75,6 +75,7 @@ function build_one {
 	LIBS=" -L${LIBVPXPREFIX}/lib"
 
 	echo "Cleaning..."
+	rm -rf builddir-${ARCH}
 	rm -f config.h
 	make clean || true
 

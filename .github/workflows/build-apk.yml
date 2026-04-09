@@ -57,7 +57,8 @@ jobs:
             TMessagesProj/jni/ffmpeg/ffmpeg/build
             TMessagesProj/jni/libvpx/libvpx/build
             TMessagesProj/jni/boringssl/boringssl/build
-          key: native-libs-arm64-${{ runner.os }}-${{ hashFiles('TMessagesProj/jni/*.sh') }}
+            TMessagesProj/jni/dav1d/build
+          key: native-libs-arm64-v2-${{ runner.os }}-${{ hashFiles('TMessagesProj/jni/*.sh') }}
           restore-keys: |
             native-libs-arm64-${{ runner.os }}-
 
@@ -92,8 +93,10 @@ jobs:
           
           cd TMessagesProj/jni
           if [ "${{ steps.cache-native.outputs.cache-hit }}" != 'true' ]; then
+            chmod +x build_libvpx_clang.sh build_ffmpeg_clang.sh build_dav1d_clang.sh build_boringssl.sh
             ./build_libvpx_clang.sh arm64
             ./build_ffmpeg_clang.sh arm64
+            ./build_dav1d_clang.sh arm64
             ./patch_ffmpeg.sh
             ./patch_boringssl.sh
             ./build_boringssl.sh arm64
