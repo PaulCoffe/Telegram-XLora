@@ -1177,6 +1177,8 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         CharSequence messageNameString = null;
         CharSequence printingString = null;
         CharSequence buttonString = null;
+        boolean drawTime = true;
+        boolean showChecks = !UserObject.isUserSelf(user) && !useMeForMyMessages;
         org.telegram.messenger.mesh.MeshDialog meshDialog = null;
         if (isDialogCell) {
             TLRPC.Dialog dialog = MessagesController.getInstance(currentAccount).dialogs_dict.get(currentDialogId);
@@ -1208,8 +1210,6 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         hasVideoThumb = false;
         nameLayoutEllipsizeByGradient = false;
         int offsetName = 0;
-        boolean showChecks = !UserObject.isUserSelf(user) && !useMeForMyMessages;
-        boolean drawTime = true;
         printingStringType = -1;
         int printingStringReplaceIndex = -1;
         if (!isForumCell()) {

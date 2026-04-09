@@ -280,11 +280,14 @@ public class MessagesController extends BaseController implements NotificationCe
                 return;
             }
         }
-        TLRPC.TL_dialogFilter meshFilter = new TLRPC.TL_dialogFilter();
-        meshFilter.id = MESH_FILTER_ID;
-        meshFilter.title = new TLRPC.TL_textWithEntities();
-        meshFilter.title.text = "Mesh";
-        meshFilter.order = dialogFilters.size();
+        TLRPC.TL_dialogFilter meshTL = new TLRPC.TL_dialogFilter();
+        meshTL.id = MESH_FILTER_ID;
+        meshTL.title = new TLRPC.TL_textWithEntities();
+        meshTL.title.text = "Mesh";
+        DialogFilter meshFilter = new DialogFilter();
+        meshFilter.id = meshTL.id;
+        meshFilter.name = meshTL.title.text;
+        meshFilter.dialogFilter = meshTL;
         dialogFilters.add(meshFilter);
         dialogFiltersById.put(meshFilter.id, meshFilter);
     }

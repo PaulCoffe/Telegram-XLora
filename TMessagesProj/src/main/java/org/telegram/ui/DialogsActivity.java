@@ -10852,7 +10852,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 return messagesController.getDialogs(folderId);
             } else if (dialogFilter.id == MessagesController.MESH_FILTER_ID) {
                 ArrayList<TLRPC.Dialog> meshDialogs = new ArrayList<>();
-                ArrayList<org.telegram.messenger.mesh.MeshStorage.MeshChannel> channels = org.telegram.messenger.mesh.MeshStorage.getInstance().getChannels();
+                List<org.telegram.messenger.mesh.MeshStorage.MeshChannel> channels = org.telegram.messenger.mesh.MeshStorage.getInstance().getChannels();
                 for (org.telegram.messenger.mesh.MeshStorage.MeshChannel channel : channels) {
                     org.telegram.messenger.mesh.MeshDialog meshDialog = new org.telegram.messenger.mesh.MeshDialog();
                     meshDialog.id = - (2000000000L + channel.hash); // Unique negative ID range for Mesh

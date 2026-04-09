@@ -16,8 +16,10 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.NotificationCenter;
@@ -374,9 +376,14 @@ public class MeshManager {
         // Send a request to pull history from node buffer
         // MeshCore CMD_FETCH_HISTORY (Example: 0x01 command byte)
         byte[] fetchCmd = new byte[] { 0x01 }; 
-        MeshProtocol.Packet packet = new MeshProtocol.Packet(MeshProtocol.TYPE_REQ, null, fetchCmd);
-        writeQueue.add(packet.serialize());
-        processWriteQueue();
+        sendData(fetchCmd);
+    }
+
+    public void onNetworkStatusChanged(boolean online) {
+        FileLog.d(TAG + ": Network status changed: " + (online ? "online" : "offline"));
+        if (online) {
+            // Logic to handle reconnection to mesh if needed
+        }
     }
 
     private byte[] encrypt(byte[] data) throws Exception {
