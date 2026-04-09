@@ -2,6 +2,7 @@ package org.telegram.ui;
 
 import android.content.Context;
 import android.view.View;
+import android.view.Gravity;
 import android.widget.FrameLayout;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
@@ -56,7 +57,7 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
         items.add(UItem.asButton(201, "Полоса (кГц)", String.valueOf(MeshTransportManager.getInstance().getBandwidth())));
         items.add(UItem.asButton(202, "SF (SF7...SF12)", String.valueOf(MeshTransportManager.getInstance().getSpreadingFactor())));
         items.add(UItem.asButton(203, "CR (4/5...4/8)", "4/" + MeshTransportManager.getInstance().getCodingRate()));
-        items.add(UItem.asButton(204, "Пресет: Москва").setAccent(true));
+        items.add(UItem.asButton(204, "Пресет: Москва").accent());
         items.add(UItem.asShadow(null));
 
         items.add(UItem.asHeader("Bluetooth устройства"));

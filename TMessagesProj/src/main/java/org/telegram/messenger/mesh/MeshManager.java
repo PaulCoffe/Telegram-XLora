@@ -23,6 +23,7 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.NotificationCenter;
+import android.widget.Toast;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.TLRPC;
@@ -426,9 +427,9 @@ public class MeshManager {
 
     private void sendPacket(byte[] data) {
         if (bluetoothGatt == null) return;
-        BluetoothGattService service = bluetoothGatt.getService(MeshProtocol.SERVICE_UUID);
+        BluetoothGattService service = bluetoothGatt.getService(UART_SERVICE_UUID);
         if (service != null) {
-            BluetoothGattCharacteristic characteristic = service.getCharacteristic(MeshProtocol.WRITE_CHAR_UUID);
+            BluetoothGattCharacteristic characteristic = service.getCharacteristic(RX_CHARACTERISTIC_UUID);
             if (characteristic != null) {
                 characteristic.setValue(data);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

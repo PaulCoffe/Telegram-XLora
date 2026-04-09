@@ -105,8 +105,11 @@ jobs:
         run: |
           # Configure gradle.properties (Root level)
           vars=gradle.properties
-          echo "DUMMY_CONST=0" >> $vars
-          echo "org.gradle.workers.max=1" >> $vars
+          # Increase parallel power and heap
+          echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m" >> $vars
+          echo "org.gradle.parallel=true" >> $vars
+          echo "org.gradle.caching=true" >> $vars
+          
           echo "APP_ID=${{ secrets.API_ID || '12345' }}" >> $vars
           echo "APP_HASH=${{ secrets.API_HASH || 'abcdef0123456789' }}" >> $vars
           echo "RELEASE_KEY_PASSWORD=password" >> $vars
