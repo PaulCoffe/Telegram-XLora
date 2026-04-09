@@ -63,6 +63,14 @@ public class MeshManager {
         (byte)0x32, (byte)0x35, (byte)0x36, (byte)0x42, (byte)0x69, (byte)0x74, (byte)0x4b, (byte)0x65, // 256BitKe
         (byte)0x79, (byte)0x5f, (byte)0x5f, (byte)0x5f, (byte)0x5f, (byte)0x5f, (byte)0x5f, (byte)0x5f  // y_______
     };
+
+    // MeshCore Protocol Commands
+    private static final byte CMD_GET_CONFIG = 0x02;
+    private static final byte CMD_GET_CONTACTS = 0x03;
+    private static final byte CMD_APP_START = 0x04;
+    private static final byte CMD_FETCH_HISTORY = 0x01;
+    
+    private boolean isHandshakeComplete = false;
     
     private final BroadcastReceiver pairingReceiver = new BroadcastReceiver() {
         @Override
@@ -314,6 +322,10 @@ public class MeshManager {
                     if (tx != null) {
                         gatt.setCharacteristicNotification(tx, true);
                         FileLog.d(TAG + ": UART Service configured, RX/TX ready");
+                        
+                        // Start automated handshake
+                        isHandshakeComplete = false;
+                        sendHandshakeCommand(CMD_APP_START);
                     }
                 }
             } else {
@@ -332,6 +344,22 @@ public class MeshManager {
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             isWriting = false;
+            
+            // Logic to chain handshake commands
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                byte[] val = characteristic.getValue();
+                if (val != null && val.length == 1) {
+                    if (val[0] == CMD_APP_START) {
+                        handler.postDelayed(() -> sendHandshakeCommand(CMD_GET_CONFIG), 200);
+                    } else if (val[0] == CMD_GET_CONFIG) {
+                        handler.postDelayed(() -> sendHandshakeCommand(CMD_GET_CONTACTS), 200);
+                    } else if (val[0] == CMD_GET_CONTACTS) {
+                        isHandshakeComplete = true;
+                        FileLog.d(TAG + ": Handshake complete");
+                    }
+                }
+            }
+            
             processWriteQueue();
         }
     };
@@ -380,9 +408,17 @@ public class MeshManager {
         }
     }
 
-    private void processIncomingPacket(byte[] encryptedData) {
+    private void processIncomingPacket(byte[] rawData) {
+        if (rawData == null || rawData.length == 0) return;
+
+        // Command responses (Local UART commands 0x01-0x0F) are usually unencrypted
+        if (rawData.length > 0 && rawData[0] < 0x10) {
+            handleLocalCommandResponse(rawData);
+            return;
+        }
+
         try {
-            byte[] decrypted = decrypt(encryptedData);
+            byte[] decrypted = decrypt(rawData);
             if (decrypted == null) return;
 
             byte[] assembled = fragmenter.onFragmentReceived(decrypted);
@@ -398,6 +434,24 @@ public class MeshManager {
             }
         } catch (Exception e) {
             FileLog.e(e);
+        }
+    }
+
+    private void handleLocalCommandResponse(byte[] data) {
+        byte cmd = data[0];
+        if (cmd == CMD_GET_CONFIG) {
+            // Parse config (Example: [CMD(1)] [PubKey(32)] [Nick(...)]
+            if (data.length >= 33) {
+                byte[] pubKey = new byte[32];
+                System.arraycopy(data, 1, pubKey, 0, 32);
+                String nick = (data.length > 33) ? new String(data, 33, data.length - 33) : "Unknown";
+                FileLog.d(TAG + ": Local config received: Nick=" + nick);
+                // Update storage self-identity
+                MeshStorage.getInstance().updateNode(org.telegram.messenger.Utilities.bytesToHex(pubKey), nick, 0, 0);
+            }
+        } else if (cmd == CMD_GET_CONTACTS) {
+            // Parse contacts list and sync with internal DB
+            FileLog.d(TAG + ": Contacts list received from node");
         }
     }
 
@@ -457,6 +511,15 @@ public class MeshManager {
         
         sendPacket(packet);
         Toast.makeText(ApplicationLoader.applicationContext, "Настройки радио отправлены", Toast.LENGTH_SHORT).show();
+    }
+
+    private void sendHandshakeCommand(byte cmd) {
+        if (rxCharacteristic == null || bluetoothGatt == null) return;
+        byte[] packet = new byte[] { cmd };
+        writeQueue.add(packet);
+        if (!isWriting) {
+            processWriteQueue();
+        }
     }
 
     private void sendPacket(byte[] data) {

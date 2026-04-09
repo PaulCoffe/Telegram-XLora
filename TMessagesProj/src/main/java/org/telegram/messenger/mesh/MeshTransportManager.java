@@ -92,6 +92,13 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
         return selectedDeviceAddress;
     }
 
+    public void setSelectedDeviceAddress(String address) {
+        this.selectedDeviceAddress = address;
+        SharedPreferences.Editor editor = ApplicationLoader.applicationContext.getSharedPreferences("mesh_config", Context.MODE_PRIVATE).edit();
+        editor.putString("mesh_device_address", address);
+        editor.apply();
+    }
+
     @Override
     public void onDevicesUpdated() {}
 

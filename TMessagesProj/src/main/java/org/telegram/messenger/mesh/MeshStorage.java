@@ -46,6 +46,11 @@ public class MeshStorage extends SQLiteOpenHelper {
                 "is_out INTEGER, " +
                 "hops INTEGER" +
                 ")");
+
+        db.execSQL("CREATE TABLE channels (" +
+                "hash INTEGER PRIMARY KEY, " +
+                "name TEXT" +
+                ")");
     }
 
     @Override
@@ -114,7 +119,50 @@ public class MeshStorage extends SQLiteOpenHelper {
         values.put("date", (int) (System.currentTimeMillis() / 1000));
         values.put("is_out", isOut ? 1 : 0);
         db.insert("messages", null, values);
+
+        // Update dialog/channel last message reference if needed
+        ContentValues channelValues = new ContentValues();
+        channelValues.put("hash", senderHash);
+        channelValues.put("name", "Mesh User " + senderHash);
+        db.insertWithOnConflict("channels", null, channelValues, SQLiteDatabase.CONFLICT_IGNORE);
     }
+
+    public ArrayList<MeshChannel> getChannels() {
+        ArrayList<MeshChannel> channels = new ArrayList<>();
+        SQLiteDatabase db = getReadableDatabase();
+        try (Cursor cursor = db.query("channels", null, null, null, null, null, null)) {
+            while (cursor.moveToNext()) {
+                MeshChannel channel = new MeshChannel();
+                channel.hash = cursor.getInt(0);
+                channel.name = cursor.getString(1);
+                channels.add(channel);
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        // If empty, add a default broadcast channel
+        if (channels.isEmpty()) {
+            MeshChannel broadcast = new MeshChannel();
+            broadcast.hash = 0;
+            broadcast.name = "Mesh Broadcast";
+            channels.add(broadcast);
+        }
+        return channels;
+    }
+
+    public String getLastMessage(int senderHash) {
+        SQLiteDatabase db = getReadableDatabase();
+        String text = "";
+        try (Cursor cursor = db.query("messages", new String[]{"text"}, "sender_hash = ?", new String[]{String.valueOf(senderHash)}, null, null, "date DESC", "1")) {
+            if (cursor.moveToFirst()) {
+                text = cursor.getString(0);
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return text;
+    }
+
     public static class MeshNode {
         public String pubkey;
         public String nickname;
@@ -122,5 +170,10 @@ public class MeshStorage extends SQLiteOpenHelper {
         public long lastSeen;
         public int rssi;
         public int hops;
+    }
+
+    public static class MeshChannel {
+        public int hash;
+        public String name;
     }
 }
