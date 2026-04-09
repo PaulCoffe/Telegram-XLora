@@ -36,6 +36,7 @@
 **ФАЗА 2: EXECUTION (РАЗРАБОТКА) — только после команды «Запускай»**
 4. **ENVIRONMENT & CI:** `git init`, `.gitignore`, `.env.example`. Создай `ARCHITECTURE.md` и CI-пайплайн. Коммит: `chore: project init`.
 5. **CODING & DATABASE:** Реализуй сервисы (non-root). Создай миграции и сиды для БД.
-6. **TESTING & SECURITY:** Напиши и запусти unit/integration тесты. Проведи аудит зависимостей.
+6. **PRE-COMMIT REVIEW:** Перед коммитом ОБЯЗАТЕЛЕН аудит (потоки, API, синтаксис).
+7. **TESTING & SECURITY:** Напиши и запусти unit/integration тесты. Проведи аудит зависимостей.
 7. **VERIFICATION:** ПРОВЕРЬ конфиг (`docker-compose config`). Подними `docker-compose up -d --build`. ПРОВЕРЬ логи и статус (Healthchecks). 
 8. **SAVE & REPORT:** Обнови `ARCHITECTURE.md`, сделай финальный коммит. Выведи подробный отчет и локальные URL.

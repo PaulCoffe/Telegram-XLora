@@ -248,6 +248,9 @@ public class NotificationCenter {
     public static final int storyQualityUpdate = totalEvents++;
     public static final int openBoostForUsersDialog = totalEvents++;
     public static final int groupRestrictionsUnlockedByBoosts = totalEvents++;
+
+    public static final int didRequestMeshPairing = totalEvents++;
+    public static final int didUpdateMeshNodes = totalEvents++;
     public static final int chatWasBoostedByUser = totalEvents++;
     public static final int groupPackUpdated = totalEvents++;
     public static final int timezonesUpdated = totalEvents++;
@@ -286,8 +289,6 @@ public class NotificationCenter {
     public static final int profileMusicUpdated = totalEvents++;
     public static final int updatedChatRanks = totalEvents++;
     public static final int joinedGroup = totalEvents++;
-    public static final int didRequestMeshPairing = totalEvents++;
-    public static final int didUpdateMeshNodes = totalEvents++;
 
     //global
     public static final int pushMessagesUpdated = totalEvents++;

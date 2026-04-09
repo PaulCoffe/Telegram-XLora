@@ -114,3 +114,5 @@
 -dontwarn org.osmdroid.**
 
 -dontwarn java.lang.invoke.StringConcatFactory
+
+-keep class org.telegram.messenger.mesh.** { *; }

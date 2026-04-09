@@ -258,6 +258,8 @@ public class MeshManager {
 
     public void confirmPairing(String pin) {
         if (currentDeviceAddress == null) return;
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (adapter == null) return;
         BluetoothDevice device = adapter.getRemoteDevice(currentDeviceAddress);
         if (device != null) {
             byte[] pinBytes = pin.getBytes();
@@ -323,9 +325,6 @@ public class MeshManager {
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             if (characteristic.getUuid().equals(TX_CHARACTERISTIC_UUID)) {
                 byte[] data = characteristic.getValue();
-                if (listener != null) {
-                    handler.post(() -> listener.onMessageReceived(data));
-                }
                 processIncomingPacket(data);
             }
         }
@@ -391,15 +390,10 @@ public class MeshManager {
                 MeshProtocol.Packet packet = MeshProtocol.Packet.deserialize(assembled);
                 if (packet == null) return;
 
-                    // Notify listeners with raw data and metadata
-                    int hops = (packet.path != null) ? packet.path.length : 0;
-                    for (MeshManagerListener l : listeners) {
-                        l.onMessageReceived(assembled, 0, hops); // RSSI 0 for now until RadioFrame parsing added
-                    }
-                    
-                    handleMeshMessage(messageText);
-                } else if (packet.type == MeshProtocol.TYPE_REQ) {
-                    // Handle history requests or node info requests
+                // Notify listeners with raw data and metadata
+                int hops = (packet.path != null) ? packet.path.length : 0;
+                for (MeshManagerListener l : listeners) {
+                    l.onMessageReceived(assembled, 0, hops); // RSSI 0 for now
                 }
             }
         } catch (Exception e) {

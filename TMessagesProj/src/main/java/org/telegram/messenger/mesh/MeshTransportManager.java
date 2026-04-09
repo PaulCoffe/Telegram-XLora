@@ -137,9 +137,17 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
         message.custom_params.writeInt32(0x4D455348); // "MESH" magic
         message.custom_params.writeInt32(hops);
         
-        ArrayList<TLRPC.Message> messages = new ArrayList<>();
-        messages.add(message);
-        MessagesController.getInstance(UserConfig.selectedAccount).processLoadedMessages(messages, userId, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, false, false, 0);
+        // Pack into TLRPC container
+        TLRPC.TL_messages_messages messagesRes = new TLRPC.TL_messages_messages();
+        messagesRes.messages.add(message);
+        
+        // Execute on UI thread to prevent crashes and ensure UI update
+        org.telegram.messenger.AndroidUtilities.runOnUIThread(() -> {
+            MessagesController.getInstance(UserConfig.selectedAccount).processLoadedMessages(
+                messagesRes, 1, userId, 0, 1, 0, 0, false, 0, 
+                0, 0, 0, 0, 1, false, 0, 0, 0, false, 0, true, false, null
+            );
+        });
     }
 
     private void routeToMeshPureChat(String senderId, MeshProtocol.Packet packet, int rssi, int hops) {

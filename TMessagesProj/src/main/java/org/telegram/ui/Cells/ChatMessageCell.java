@@ -23781,6 +23781,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                     float indicatorX = -dp(12);
                     Theme.chat_timePaint.setAlpha((int) (Theme.chat_timePaint.getAlpha() * 0.7f));
                     canvas.drawText("Mesh", indicatorX, 0, Theme.chat_timePaint);
+                    Theme.chat_timePaint.setAlpha(255);
                     canvas.restore();
                 }
                 SpoilerEffect.layoutDrawMaybe(timeLayout, canvas);

@@ -259,7 +259,6 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
                     break;
                 }
             }
-            }
         }
     }
 
