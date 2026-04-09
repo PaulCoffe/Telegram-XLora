@@ -3,11 +3,16 @@ package org.telegram.messenger.mesh;
 import android.content.Context;
 import android.content.SharedPreferences;
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.UserConfig;
+import org.telegram.tgnet.TLRPC;
+import java.util.ArrayList;
+import android.util.Base64;
 
 /**
  * MeshTransportManager maintains the global state of the Mesh transport.
  */
-public class MeshTransportManager {
+public class MeshTransportManager implements MeshManager.MeshManagerListener {
     private static volatile MeshTransportManager Instance;
     private boolean meshEnabled;
     private String selectedDeviceAddress;
@@ -39,6 +44,8 @@ public class MeshTransportManager {
         bandwidth = preferences.getFloat("radio_bw", 62.5f);
         spreadingFactor = preferences.getInt("radio_sf", 7);
         codingRate = preferences.getInt("radio_cr", 7);
+
+        MeshManager.getInstance().addListener(this);
     }
 
     public long getFrequency() { return frequency; }
@@ -85,10 +92,58 @@ public class MeshTransportManager {
         return selectedDeviceAddress;
     }
 
-    public void setSelectedDeviceAddress(String address) {
-        this.selectedDeviceAddress = address;
-        SharedPreferences.Editor editor = ApplicationLoader.applicationContext.getSharedPreferences("mesh_config", Context.MODE_PRIVATE).edit();
-        editor.putString("mesh_device_address", address);
-        editor.apply();
+    @Override
+    public void onDevicesUpdated() {}
+
+    @Override
+    public void onConnectionStateChanged(boolean connected) {}
+
+    @Override
+    public void onMessageReceived(byte[] data, int rssi, int hops) {
+        MeshProtocol.Packet packet = MeshProtocol.Packet.deserialize(data);
+        if (packet == null) return;
+
+        // In MeshCore protocol, first node in path is often the direct sender hash if we don't have pubkey
+        String senderId = (packet.path != null && packet.path.length > 0) ? String.valueOf(packet.path[0]) : "unknown";
+        
+        // Update storage with discovered node
+        MeshStorage.getInstance().updateNode(senderId, null, rssi, hops);
+        
+        long tgUserId = MeshStorage.getInstance().getTgUserIdForNode(senderId);
+        if (tgUserId != 0) {
+            routeToTelegramChat(tgUserId, packet, rssi, hops);
+        } else {
+            routeToMeshPureChat(senderId, packet, rssi, hops);
+        }
+    }
+
+    private void routeToTelegramChat(long userId, MeshProtocol.Packet packet, int rssi, int hops) {
+        if (packet.type != MeshProtocol.TYPE_TXT_MSG) return;
+        String text = new String(packet.payload);
+        
+        // Simulate incoming message for user
+        TLRPC.TL_message message = new TLRPC.TL_message();
+        message.message = text;
+        message.date = (int) (System.currentTimeMillis() / 1000);
+        message.from_id = new TLRPC.TL_peerUser();
+        message.from_id.user_id = userId;
+        message.peer_id = new TLRPC.TL_peerUser();
+        message.peer_id.user_id = userId;
+        message.out = false;
+        message.unread = true;
+        
+        // Add custom params for Mesh indicator
+        message.custom_params = new org.telegram.tgnet.NativeByteBuffer(8);
+        message.custom_params.writeInt32(0x4D455348); // "MESH" magic
+        message.custom_params.writeInt32(hops);
+        
+        ArrayList<TLRPC.Message> messages = new ArrayList<>();
+        messages.add(message);
+        MessagesController.getInstance(UserConfig.selectedAccount).processLoadedMessages(messages, userId, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, false, false, 0);
+    }
+
+    private void routeToMeshPureChat(String senderId, MeshProtocol.Packet packet, int rssi, int hops) {
+        // Handle pure mesh chat (virtual dialogs logic)
+        // ... (Similar to above but with Mesh-prefixed IDs)
     }
 }

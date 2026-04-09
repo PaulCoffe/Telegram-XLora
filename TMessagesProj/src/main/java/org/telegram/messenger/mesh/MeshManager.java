@@ -16,6 +16,9 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.content.IntentFilter;
+import android.content.Intent;
+import android.content.BroadcastReceiver;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
@@ -61,6 +64,22 @@ public class MeshManager {
         (byte)0x79, (byte)0x5f, (byte)0x5f, (byte)0x5f, (byte)0x5f, (byte)0x5f, (byte)0x5f, (byte)0x5f  // y_______
     };
     
+    private final BroadcastReceiver pairingReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (BluetoothDevice.ACTION_PAIRING_REQUEST.equals(action)) {
+                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                int type = intent.getIntExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT, BluetoothDevice.ERROR);
+                if (device != null && device.getAddress().equals(currentDeviceAddress)) {
+                    NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.didRequestMeshPairing, device, type);
+                }
+            }
+        }
+    };
+
+    private String currentDeviceAddress;
+    
     private final MeshFragmenter fragmenter = new MeshFragmenter();
     private BluetoothGatt bluetoothGatt;
     private BluetoothGattCharacteristic rxCharacteristic; // Phone writes to this
@@ -71,13 +90,19 @@ public class MeshManager {
     public interface MeshManagerListener {
         void onDevicesUpdated();
         void onConnectionStateChanged(boolean connected);
-        void onMessageReceived(byte[] data);
+        void onMessageReceived(byte[] data, int rssi, int hops);
     }
 
-    private MeshManagerListener listener;
+    private final ArrayList<MeshManagerListener> listeners = new ArrayList<>();
 
-    public void setListener(MeshManagerListener listener) {
-        this.listener = listener;
+    public void addListener(MeshManagerListener listener) {
+        if (!listeners.contains(listener)) {
+            listeners.add(listener);
+        }
+    }
+
+    public void removeListener(MeshManagerListener listener) {
+        listeners.remove(listener);
     }
 
     private final java.util.ArrayList<BluetoothDevice> foundDevices = new java.util.ArrayList<>();
@@ -96,7 +121,10 @@ public class MeshManager {
         return localInstance;
     }
 
-    private MeshManager() {}
+    private MeshManager() {
+        IntentFilter filter = new IntentFilter(BluetoothDevice.ACTION_PAIRING_REQUEST);
+        ApplicationLoader.applicationContext.registerReceiver(pairingReceiver, filter);
+    }
 
     public void startScanningIfPermissionsGranted() {
         if (ApplicationLoader.applicationContext != null) {
@@ -192,8 +220,8 @@ public class MeshManager {
                 }
                 if (!exists) {
                     foundDevices.add(device);
-                    if (listener != null) {
-                        handler.post(() -> listener.onDevicesUpdated());
+                    for (MeshManagerListener l : listeners) {
+                        l.onDevicesUpdated();
                     }
                 }
             }
@@ -228,7 +256,20 @@ public class MeshManager {
         }
     }
 
+    public void confirmPairing(String pin) {
+        if (currentDeviceAddress == null) return;
+        BluetoothDevice device = adapter.getRemoteDevice(currentDeviceAddress);
+        if (device != null) {
+            byte[] pinBytes = pin.getBytes();
+            device.setPin(pinBytes);
+            device.setPairingConfirmation(true);
+        }
+    }
+
     private void connectToDevice(BluetoothDevice device) {
+        if (device == null) return;
+        currentDeviceAddress = device.getAddress();
+        FileLog.d(TAG, "Connecting to: " + device.getName() + " (" + currentDeviceAddress + ")");
         bluetoothGatt = device.connectGatt(ApplicationLoader.applicationContext, false, gattCallback);
     }
 
@@ -247,15 +288,15 @@ public class MeshManager {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 FileLog.d(TAG + ": GATT Connected, discovering services...");
                 isConnected = true;
-                if (listener != null) {
-                    handler.post(() -> listener.onConnectionStateChanged(true));
+                for (MeshManagerListener l : listeners) {
+                    l.onConnectionStateChanged(true);
                 }
                 gatt.discoverServices();
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 FileLog.d(TAG + ": GATT Disconnected");
                 isConnected = false;
-                if (listener != null) {
-                    handler.post(() -> listener.onConnectionStateChanged(false));
+                for (MeshManagerListener l : listeners) {
+                    l.onConnectionStateChanged(false);
                 }
                 rxCharacteristic = null;
             }
@@ -350,12 +391,11 @@ public class MeshManager {
                 MeshProtocol.Packet packet = MeshProtocol.Packet.deserialize(assembled);
                 if (packet == null) return;
 
-                if (packet.type == MeshProtocol.TYPE_TXT_MSG || packet.type == MeshProtocol.TYPE_GRP_TXT) {
-                    String messageText = new String(packet.payload);
-                    int senderHash = (packet.path != null && packet.path.length > 0) ? packet.path[packet.path.length - 1] : 0;
-                    
-                    // Save to local storage
-                    MeshStorage.getInstance().saveMessage(0, senderHash, messageText, false);
+                    // Notify listeners with raw data and metadata
+                    int hops = (packet.path != null) ? packet.path.length : 0;
+                    for (MeshManagerListener l : listeners) {
+                        l.onMessageReceived(assembled, 0, hops); // RSSI 0 for now until RadioFrame parsing added
+                    }
                     
                     handleMeshMessage(messageText);
                 } else if (packet.type == MeshProtocol.TYPE_REQ) {

@@ -118,6 +118,9 @@ import java.util.regex.Pattern;
 
 import me.vkryl.core.BitwiseUtils;
 
+import org.telegram.tgnet.SerializedData;
+import org.telegram.tgnet.NativeByteBuffer;
+
 public class MessageObject {
 
     public static final int MESSAGE_SEND_STATE_SENT = 0;
@@ -248,6 +251,9 @@ public class MessageObject {
     public HashSet<Integer> expandedQuotes;
     public boolean expandedExplanation;
     public boolean forceShowPollResults;
+
+    public boolean isMesh;
+    public int hops;
 
     public boolean isSpoilersRevealed;
     public boolean isMediaSpoilersRevealed;
@@ -1871,6 +1877,20 @@ public class MessageObject {
 
         currentAccount = accountNum;
         messageOwner = message;
+
+        if (messageOwner != null && messageOwner.custom_params != null) {
+            try {
+                messageOwner.custom_params.rewind();
+                if (messageOwner.custom_params.limit() >= 8) {
+                    int magic = messageOwner.custom_params.readInt32(false);
+                    if (magic == 0x4D455348) { // "MESH" magic
+                        isMesh = true;
+                        hops = messageOwner.custom_params.readInt32(false);
+                    }
+                }
+            } catch (Exception ignore) {}
+        }
+
         replyMessageObject = replyToMessage;
         eventId = eid;
         wasUnread = !messageOwner.out && messageOwner.unread;

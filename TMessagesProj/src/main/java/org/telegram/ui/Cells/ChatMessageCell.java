@@ -18322,6 +18322,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             }
         }
         timeTextWidth = timeWidth = (int) Math.ceil(Theme.chat_timePaint.measureText(currentTimeString, 0, currentTimeString == null ? 0 : currentTimeString.length()));
+        if (currentMessageObject != null && currentMessageObject.isMesh) {
+            timeWidth += dp(14) + (int) Math.ceil(Theme.chat_timePaint.measureText(" Mesh"));
+        }
         if (currentMessageObject.scheduled && currentMessageObject.messageOwner.date == 0x7FFFFFFE || currentMessageObject.notime) {
             timeWidth -= dp(8);
         }
@@ -23773,6 +23776,13 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 }
             } else {
                 canvas.translate(drawTimeX = timeTitleTimeX + additionalX, drawTimeY = layoutHeight - dp(pinnedBottom || pinnedTop ? 7.5f : 6.5f) - timeLayout.getHeight() + timeYOffset);
+                if (currentMessageObject != null && currentMessageObject.isMesh) {
+                    canvas.save();
+                    float indicatorX = -dp(12);
+                    Theme.chat_timePaint.setAlpha((int) (Theme.chat_timePaint.getAlpha() * 0.7f));
+                    canvas.drawText("Mesh", indicatorX, 0, Theme.chat_timePaint);
+                    canvas.restore();
+                }
                 SpoilerEffect.layoutDrawMaybe(timeLayout, canvas);
             }
             canvas.restore();

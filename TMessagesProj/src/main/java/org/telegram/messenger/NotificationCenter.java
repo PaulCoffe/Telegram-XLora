@@ -286,6 +286,8 @@ public class NotificationCenter {
     public static final int profileMusicUpdated = totalEvents++;
     public static final int updatedChatRanks = totalEvents++;
     public static final int joinedGroup = totalEvents++;
+    public static final int didRequestMeshPairing = totalEvents++;
+    public static final int didUpdateMeshNodes = totalEvents++;
 
     //global
     public static final int pushMessagesUpdated = totalEvents++;

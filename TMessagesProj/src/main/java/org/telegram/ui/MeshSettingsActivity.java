@@ -9,6 +9,8 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.mesh.MeshManager;
 import org.telegram.messenger.mesh.MeshTransportManager;
+import org.telegram.messenger.mesh.MeshStorage;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
@@ -19,13 +21,15 @@ import org.telegram.ui.Components.UniversalRecyclerView;
 
 import java.util.ArrayList;
 
-public class MeshSettingsActivity extends BaseFragment implements MeshManager.MeshManagerListener {
+public class MeshSettingsActivity extends BaseFragment implements MeshManager.MeshManagerListener, NotificationCenter.NotificationCenterDelegate {
 
     private UniversalRecyclerView listView;
 
     @Override
     public View createView(Context context) {
-        MeshManager.getInstance().setListener(this);
+        MeshManager.getInstance().addListener(this);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didRequestMeshPairing);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didUpdateMeshNodes);
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
         actionBar.setTitle("Настройки LoRa Mesh");
@@ -60,19 +64,21 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
         items.add(UItem.asButton(204, "Пресет: Москва").accent());
         items.add(UItem.asShadow(null));
 
-        items.add(UItem.asHeader("Bluetooth устройства"));
-        
-        ArrayList<String> devices = MeshManager.getInstance().getFoundDevices();
-        if (devices.isEmpty()) {
-            items.add(UItem.asHeader("Устройства не найдены..."));
-        } else {
-            for (int i = 0; i < devices.size(); i++) {
-                items.add(UItem.asButton(2 + i, devices.get(i)));
-            }
-        }
-        
         items.add(UItem.asShadow(null));
         items.add(UItem.asButton(100, "Поиск устройств MeshCore"));
+
+        ArrayList<MeshStorage.MeshNode> nodes = MeshStorage.getInstance().getAllNodes();
+        if (!nodes.isEmpty()) {
+            items.add(UItem.asHeader("Обнаруженные узлы"));
+            for (int i = 0; i < nodes.size(); i++) {
+                MeshStorage.MeshNode node = nodes.get(i);
+                String sub = "Hops: " + node.hops + " | RSSI: " + node.rssi;
+                if (node.tgUserId != 0) {
+                    sub += " | Привязан к контакту";
+                }
+                items.add(UItem.asButton(1000 + i, (node.nickname != null ? node.nickname : "Node " + node.pubkey), sub));
+            }
+        }
     }
 
     private void onClick(UItem item, View view, int position, float x, float y) {
@@ -125,6 +131,51 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
         }
     }
 
+    @Override
+    public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.didRequestMeshPairing) {
+            android.bluetooth.BluetoothDevice device = (android.bluetooth.BluetoothDevice) args[0];
+            showNumberInput("Введите PIN для " + device.getName(), "", (pin) -> {
+                MeshManager.getInstance().confirmPairing(pin);
+            });
+        } else if (id == NotificationCenter.didUpdateMeshNodes) {
+            if (listView != null) {
+                listView.adapter.update(true);
+            }
+        } else if (item.id >= 1000) {
+            int idx = item.id - 1000;
+            ArrayList<MeshStorage.MeshNode> nodes = MeshStorage.getInstance().getAllNodes();
+            if (idx >= 0 && idx < nodes.size()) {
+                MeshStorage.MeshNode node = nodes.get(idx);
+                showNodeOptions(node);
+            }
+        }
+    }
+
+    private void showNodeOptions(MeshStorage.MeshNode node) {
+        org.telegram.ui.ActionBar.AlertDialog.Builder builder = new org.telegram.ui.ActionBar.AlertDialog.Builder(getParentActivity());
+        builder.setTitle("Узел " + node.pubkey);
+        builder.setItems(new CharSequence[]{"Привязать к контакту Telegram", "Отвязать"}, (dialog, which) -> {
+            if (which == 0) {
+                android.os.Bundle args = new android.os.Bundle();
+                args.putBoolean("onlyUsers", true);
+                args.putBoolean("destroyAfterSelect", true);
+                args.putBoolean("returnAsChild", true);
+                ContactsActivity contactsActivity = new ContactsActivity(args);
+                contactsActivity.setDelegate((user, param, fragment) -> {
+                    MeshStorage.getInstance().linkNodeToUser(node.pubkey, user == null ? 0 : user.id);
+                    listView.adapter.update(true);
+                    fragment.finishFragment();
+                });
+                presentFragment(contactsActivity);
+            } else if (which == 1) {
+                MeshStorage.getInstance().linkNodeToUser(node.pubkey, 0);
+                listView.adapter.update(true);
+            }
+        });
+        showDialog(builder.create());
+    }
+
     private void showNumberInput(String title, String current, org.telegram.messenger.Utilities.Callback<String> callback) {
         org.telegram.ui.ActionBar.AlertDialog.Builder builder = new org.telegram.ui.ActionBar.AlertDialog.Builder(getParentActivity());
         builder.setTitle(title);
@@ -168,7 +219,7 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
     @Override
     public void onResume() {
         super.onResume();
-        MeshManager.getInstance().setListener(this);
+        MeshManager.getInstance().addListener(this);
         if (listView != null) {
             listView.adapter.update(true);
         }
@@ -177,7 +228,7 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
     @Override
     public void onPause() {
         super.onPause();
-        MeshManager.getInstance().setListener(null);
+        MeshManager.getInstance().removeListener(this);
     }
 
     @Override
@@ -195,7 +246,7 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
     }
 
     @Override
-    public void onMessageReceived(byte[] data) {
+    public void onMessageReceived(byte[] data, int rssi, int hops) {
     }
 
     @Override
@@ -208,9 +259,14 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
                     break;
                 }
             }
-            if (allGranted) {
-                MeshManager.getInstance().startScanning();
             }
         }
+    }
+
+    @Override
+    public void onFragmentDestroy() {
+        super.onFragmentDestroy();
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.didRequestMeshPairing);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.didUpdateMeshNodes);
     }
 }
