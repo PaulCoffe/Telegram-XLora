@@ -128,6 +128,13 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
             MeshTransportManager.getInstance().setRadioConfig(868731018L, 62.5f, 7, 7);
             listView.adapter.update(true);
             android.widget.Toast.makeText(getParentActivity(), "Применен пресет: Москва", android.widget.Toast.LENGTH_SHORT).show();
+        } else if (item.id >= 1000) {
+            int idx = item.id - 1000;
+            ArrayList<MeshStorage.MeshNode> nodes = MeshStorage.getInstance().getAllNodes();
+            if (idx >= 0 && idx < nodes.size()) {
+                MeshStorage.MeshNode node = nodes.get(idx);
+                showNodeOptions(node);
+            }
         }
     }
 
@@ -141,13 +148,6 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
         } else if (id == NotificationCenter.didUpdateMeshNodes) {
             if (listView != null) {
                 listView.adapter.update(true);
-            }
-        } else if (item.id >= 1000) {
-            int idx = item.id - 1000;
-            ArrayList<MeshStorage.MeshNode> nodes = MeshStorage.getInstance().getAllNodes();
-            if (idx >= 0 && idx < nodes.size()) {
-                MeshStorage.MeshNode node = nodes.get(idx);
-                showNodeOptions(node);
             }
         }
     }

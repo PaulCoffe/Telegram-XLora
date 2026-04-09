@@ -61,6 +61,9 @@ public class MeshStorage extends SQLiteOpenHelper {
         values.put("last_rssi", rssi);
         values.put("last_hops", hops);
         db.insertWithOnConflict("nodes", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+        org.telegram.messenger.AndroidUtilities.runOnUIThread(() -> {
+            org.telegram.messenger.NotificationCenter.getGlobalInstance().postNotificationName(org.telegram.messenger.NotificationCenter.didUpdateMeshNodes);
+        });
     }
 
     public void linkNodeToUser(String pubkey, long tgUserId) {
@@ -68,6 +71,9 @@ public class MeshStorage extends SQLiteOpenHelper {
         ContentValues values = new ContentValues();
         values.put("tg_user_id", tgUserId);
         db.update("nodes", values, "pubkey = ?", new String[]{pubkey});
+        org.telegram.messenger.AndroidUtilities.runOnUIThread(() -> {
+            org.telegram.messenger.NotificationCenter.getGlobalInstance().postNotificationName(org.telegram.messenger.NotificationCenter.didUpdateMeshNodes);
+        });
     }
 
     public long getTgUserIdForNode(String pubkey) {
@@ -109,6 +115,7 @@ public class MeshStorage extends SQLiteOpenHelper {
         values.put("is_out", isOut ? 1 : 0);
         db.insert("messages", null, values);
     }
+    public static class MeshNode {
         public String pubkey;
         public String nickname;
         public long tgUserId;
