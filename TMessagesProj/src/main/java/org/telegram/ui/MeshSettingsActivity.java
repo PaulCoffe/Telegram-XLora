@@ -27,7 +27,7 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
         MeshManager.getInstance().setListener(this);
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
-        actionBar.setTitle("LoRa Mesh Settings");
+        actionBar.setTitle("Настройки LoRa Mesh");
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
@@ -48,15 +48,22 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
     }
 
     private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
-        items.add(UItem.asCheck(1, "Enable LoRa Mesh").setChecked(MeshTransportManager.getInstance().isMeshEnabled()));
-        items.add(UItem.asShadow(null));
-        items.get(items.size() - 1).text = "When enabled, messages will be sent via LoRa when offline.";
+        items.add(UItem.asCheck(1, "Включить LoRa Mesh").setChecked(MeshTransportManager.getInstance().isMeshEnabled()));
+        items.add(UItem.asShadow("Если включено, сообщения будут отправляться через LoRa при отсутствии интернет-соединения."));
         
-        items.add(UItem.asHeader("Bluetooth Devices"));
+        items.add(UItem.asHeader("Настройки радио"));
+        items.add(UItem.asButton(200, "Частота (Гц)", String.valueOf(MeshTransportManager.getInstance().getFrequency())));
+        items.add(UItem.asButton(201, "Полоса (кГц)", String.valueOf(MeshTransportManager.getInstance().getBandwidth())));
+        items.add(UItem.asButton(202, "SF (SF7...SF12)", String.valueOf(MeshTransportManager.getInstance().getSpreadingFactor())));
+        items.add(UItem.asButton(203, "CR (4/5...4/8)", "4/" + MeshTransportManager.getInstance().getCodingRate()));
+        items.add(UItem.asButton(204, "Пресет: Москва").setAccent(true));
+        items.add(UItem.asShadow(null));
+
+        items.add(UItem.asHeader("Bluetooth устройства"));
         
         ArrayList<String> devices = MeshManager.getInstance().getFoundDevices();
         if (devices.isEmpty()) {
-            items.add(UItem.asHeader("No devices found..."));
+            items.add(UItem.asHeader("Устройства не найдены..."));
         } else {
             for (int i = 0; i < devices.size(); i++) {
                 items.add(UItem.asButton(2 + i, devices.get(i)));
@@ -64,7 +71,7 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
         }
         
         items.add(UItem.asShadow(null));
-        items.add(UItem.asButton(100, "Scan for MeshCore Devices"));
+        items.add(UItem.asButton(100, "Поиск устройств MeshCore"));
     }
 
     private void onClick(UItem item, View view, int position, float x, float y) {
@@ -80,13 +87,55 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
         } else if (item.id == 100) {
             checkPermissionsAndScan();
         } else if (item.id >= 2 && item.id < 100) {
-            String deviceAddress = item.text.toString();
-            if (deviceAddress.contains("\n")) {
-                deviceAddress = deviceAddress.substring(deviceAddress.lastIndexOf("\n") + 1);
+            ArrayList<String> devices = MeshManager.getInstance().getFoundDevices();
+            int idx = item.id - 2;
+            if (idx >= 0 && idx < devices.size()) {
+                String deviceAddress = devices.get(idx);
+                if (deviceAddress.contains("\n")) {
+                    deviceAddress = deviceAddress.substring(deviceAddress.lastIndexOf("\n") + 1);
+                }
+                MeshManager.getInstance().connect(deviceAddress);
+                listView.adapter.update(true);
             }
-            MeshManager.getInstance().connect(deviceAddress);
+        } else if (item.id == 200) { // Frequency
+            showNumberInput("Частота (Гц)", String.valueOf(MeshTransportManager.getInstance().getFrequency()), (val) -> {
+                MeshTransportManager.getInstance().setRadioConfig(Long.parseLong(val), MeshTransportManager.getInstance().getBandwidth(), MeshTransportManager.getInstance().getSpreadingFactor(), MeshTransportManager.getInstance().getCodingRate());
+                listView.adapter.update(true);
+            });
+        } else if (item.id == 201) { // Bandwidth
+            showNumberInput("Полоса (кГц)", String.valueOf(MeshTransportManager.getInstance().getBandwidth()), (val) -> {
+                MeshTransportManager.getInstance().setRadioConfig(MeshTransportManager.getInstance().getFrequency(), Float.parseFloat(val), MeshTransportManager.getInstance().getSpreadingFactor(), MeshTransportManager.getInstance().getCodingRate());
+                listView.adapter.update(true);
+            });
+        } else if (item.id == 202) { // SF
+            showNumberInput("SF (7-12)", String.valueOf(MeshTransportManager.getInstance().getSpreadingFactor()), (val) -> {
+                MeshTransportManager.getInstance().setRadioConfig(MeshTransportManager.getInstance().getFrequency(), MeshTransportManager.getInstance().getBandwidth(), Integer.parseInt(val), MeshTransportManager.getInstance().getCodingRate());
+                listView.adapter.update(true);
+            });
+        } else if (item.id == 203) { // CR
+            showNumberInput("CR (5-8 for 4/5-4/8)", String.valueOf(MeshTransportManager.getInstance().getCodingRate()), (val) -> {
+                MeshTransportManager.getInstance().setRadioConfig(MeshTransportManager.getInstance().getFrequency(), MeshTransportManager.getInstance().getBandwidth(), MeshTransportManager.getInstance().getSpreadingFactor(), Integer.parseInt(val));
+                listView.adapter.update(true);
+            });
+        } else if (item.id == 204) { // Moscow Preset
+            MeshTransportManager.getInstance().setRadioConfig(868731018L, 62.5f, 7, 7);
             listView.adapter.update(true);
+            android.widget.Toast.makeText(getParentActivity(), "Применен пресет: Москва", android.widget.Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void showNumberInput(String title, String current, org.telegram.messenger.Utilities.Callback<String> callback) {
+        org.telegram.ui.ActionBar.AlertDialog.Builder builder = new org.telegram.ui.ActionBar.AlertDialog.Builder(getParentActivity());
+        builder.setTitle(title);
+        final android.widget.EditText editText = new android.widget.EditText(getParentActivity());
+        editText.setText(current);
+        editText.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        FrameLayout container = new FrameLayout(getParentActivity());
+        container.addView(editText, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 20, 10, 20, 10));
+        builder.setView(container);
+        builder.setPositiveButton("OK", (dialog, which) -> callback.run(editText.getText().toString()));
+        builder.setNegativeButton("Отмена", null);
+        showDialog(builder.create());
     }
 
     private void checkPermissionsAndScan() {

@@ -272,24 +272,32 @@ public class MessagesController extends BaseController implements NotificationCe
     public ArrayList<DialogFilter> dialogFilters = new ArrayList<>();
 
     public void checkMeshFilter() {
-        if (!org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled()) {
-            return;
-        }
+        boolean enabled = org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled();
+        int existingIndex = -1;
         for (int a = 0, N = dialogFilters.size(); a < N; a++) {
             if (dialogFilters.get(a).id == MESH_FILTER_ID) {
-                return;
+                existingIndex = a;
+                break;
             }
         }
-        TLRPC.TL_dialogFilter meshTL = new TLRPC.TL_dialogFilter();
-        meshTL.id = MESH_FILTER_ID;
-        meshTL.title = new TLRPC.TL_textWithEntities();
-        meshTL.title.text = "Mesh";
-        DialogFilter meshFilter = new DialogFilter();
-        meshFilter.id = meshTL.id;
-        meshFilter.name = meshTL.title.text;
-        meshFilter.order = dialogFilters.size();
-        dialogFilters.add(meshFilter);
-        dialogFiltersById.put(meshFilter.id, meshFilter);
+
+        if (enabled && existingIndex == -1) {
+            TLRPC.TL_dialogFilter meshTL = new TLRPC.TL_dialogFilter();
+            meshTL.id = MESH_FILTER_ID;
+            meshTL.title = new TLRPC.TL_textWithEntities();
+            meshTL.title.text = "Mesh";
+            DialogFilter meshFilter = new DialogFilter();
+            meshFilter.id = meshTL.id;
+            meshFilter.name = meshTL.title.text;
+            meshFilter.order = dialogFilters.size();
+            dialogFilters.add(meshFilter);
+            dialogFiltersById.put(meshFilter.id, meshFilter);
+            NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.dialogFiltersUpdated);
+        } else if (!enabled && existingIndex != -1) {
+            DialogFilter filter = dialogFilters.remove(existingIndex);
+            dialogFiltersById.remove(filter.id);
+            NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.dialogFiltersUpdated);
+        }
     }
 
     public ArrayList<DialogFilter> frozenDialogFilters = null;

@@ -118,7 +118,14 @@ public class MeshManager {
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter == null || !adapter.isEnabled()) {
             FileLog.e(TAG + ": Bluetooth not available or disabled");
+            Toast.makeText(ApplicationLoader.applicationContext, "Bluetooth выключен", Toast.LENGTH_SHORT).show();
             return;
+        }
+
+        // Check Location services (required for BLE scanning)
+        android.location.LocationManager lm = (android.location.LocationManager) ApplicationLoader.applicationContext.getSystemService(Context.LOCATION_SERVICE);
+        if (!lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)) {
+            Toast.makeText(ApplicationLoader.applicationContext, "Включите Геолокацию для поиска устройств", Toast.LENGTH_LONG).show();
         }
 
         // Permission check for Android 12+
@@ -140,6 +147,7 @@ public class MeshManager {
             foundDevices.clear();
             scanner.startScan(scanCallback);
             FileLog.d(TAG + ": Scan started successfully");
+            Toast.makeText(ApplicationLoader.applicationContext, "Поиск устройств MeshCore...", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
             FileLog.e(TAG + ": Exception starting scan: " + e.getMessage());
             isScanning = false;
@@ -173,7 +181,7 @@ public class MeshManager {
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
             BluetoothDevice device = result.getDevice();
-            if (device != null && device.getName() != null) {
+            if (device != null) {
                 boolean exists = false;
                 for (BluetoothDevice d : foundDevices) {
                     if (d.getAddress().equals(device.getAddress())) {
@@ -377,6 +385,60 @@ public class MeshManager {
         // MeshCore CMD_FETCH_HISTORY (Example: 0x01 command byte)
         byte[] fetchCmd = new byte[] { 0x01 }; 
         sendData(fetchCmd);
+    }
+
+    public void sendRadioConfig(long freq, float bw, int sf, int cr) {
+        if (bluetoothGatt == null) return;
+        
+        // CMD_SET_CHANNEL_CONFIG = 32
+        // [CMD(1)] [Index(1)] [Freq(4 LE)] [BW_idx(1)] [SF(1)] [CR(1)] [Power(1)]
+        byte[] packet = new byte[10];
+        packet[0] = 32; // CMD_SET_CHANNEL_CONFIG
+        packet[1] = 0;  // Channel Index
+        
+        // Frequency (Hz) LE
+        packet[2] = (byte) (freq & 0xFF);
+        packet[3] = (byte) ((freq >> 8) & 0xFF);
+        packet[4] = (byte) ((freq >> 16) & 0xFF);
+        packet[5] = (byte) ((freq >> 24) & 0xFF);
+        
+        // Bandwidth index mapping
+        byte bwIdx = 7; // Default 125kHz
+        if (bw <= 7.8f) bwIdx = 0;
+        else if (bw <= 10.4f) bwIdx = 1;
+        else if (bw <= 15.6f) bwIdx = 2;
+        else if (bw <= 20.8f) bwIdx = 3;
+        else if (bw <= 31.25f) bwIdx = 4;
+        else if (bw <= 41.7f) bwIdx = 5;
+        else if (bw <= 62.5f) bwIdx = 6;
+        else if (bw <= 125f) bwIdx = 7;
+        else if (bw <= 250f) bwIdx = 8;
+        else bwIdx = 9;
+        
+        packet[6] = bwIdx;
+        packet[7] = (byte) sf;
+        packet[8] = (byte) cr;
+        packet[9] = 20; // Default Power 20dBm
+        
+        sendPacket(packet);
+        Toast.makeText(ApplicationLoader.applicationContext, "Настройки радио отправлены", Toast.LENGTH_SHORT).show();
+    }
+
+    private void sendPacket(byte[] data) {
+        if (bluetoothGatt == null) return;
+        BluetoothGattService service = bluetoothGatt.getService(MeshProtocol.SERVICE_UUID);
+        if (service != null) {
+            BluetoothGattCharacteristic characteristic = service.getCharacteristic(MeshProtocol.WRITE_CHAR_UUID);
+            if (characteristic != null) {
+                characteristic.setValue(data);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (ActivityCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                        return;
+                    }
+                }
+                bluetoothGatt.writeCharacteristic(characteristic);
+            }
+        }
     }
 
     public void onNetworkStatusChanged(boolean online) {

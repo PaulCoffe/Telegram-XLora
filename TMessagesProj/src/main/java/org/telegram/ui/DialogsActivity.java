@@ -7834,11 +7834,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     return;
                 }
                 dialogId = dialog.id;
-                if (dialogId <= -2000000000L) {
+                if (object instanceof org.telegram.messenger.mesh.MeshDialog) {
+                    org.telegram.messenger.mesh.MeshDialog meshDialog = (org.telegram.messenger.mesh.MeshDialog) object;
                     long meshHash = -(dialogId + 2000000000L);
                     org.telegram.ui.ActionBar.AlertDialog.Builder builder = new org.telegram.ui.ActionBar.AlertDialog.Builder(getParentActivity());
-                    builder.setTitle("Mesh Channel");
-                    builder.setMessage("This is an offline MeshCore channel (Hash: " + meshHash + ").\n\nFull chat integration is in progress.");
+                    builder.setTitle("Канал Mesh");
+                    builder.setMessage("Это оффлайн-канал MeshCore (Hash: " + meshHash + ").\n\nПолная интеграция чата находится в разработке.");
                     builder.setPositiveButton(org.telegram.messenger.LocaleController.getString("OK", org.telegram.messenger.R.string.OK), null);
                     showDialog(builder.create());
                     return;
