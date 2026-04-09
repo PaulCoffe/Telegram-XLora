@@ -140,9 +140,13 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
         message.unread = true;
         
         // Add custom params for Mesh indicator
-        message.custom_params = new org.telegram.tgnet.NativeByteBuffer(8);
-        message.custom_params.writeInt32(0x4D455348); // "MESH" magic
-        message.custom_params.writeInt32(hops);
+        try {
+            message.custom_params = new org.telegram.tgnet.NativeByteBuffer(8);
+            message.custom_params.writeInt32(0x4D455348); // "MESH" magic
+            message.custom_params.writeInt32(hops);
+        } catch (Exception e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
         
         // Pack into TLRPC container
         TLRPC.TL_messages_messages messagesRes = new TLRPC.TL_messages_messages();
