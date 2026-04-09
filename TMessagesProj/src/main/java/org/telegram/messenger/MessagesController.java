@@ -287,7 +287,7 @@ public class MessagesController extends BaseController implements NotificationCe
         DialogFilter meshFilter = new DialogFilter();
         meshFilter.id = meshTL.id;
         meshFilter.name = meshTL.title.text;
-        meshFilter.dialogFilter = meshTL;
+        meshFilter.order = dialogFilters.size();
         dialogFilters.add(meshFilter);
         dialogFiltersById.put(meshFilter.id, meshFilter);
     }
