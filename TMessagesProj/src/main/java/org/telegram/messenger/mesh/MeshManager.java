@@ -279,7 +279,7 @@ public class MeshManager {
     private void connectToDevice(BluetoothDevice device) {
         if (device == null) return;
         currentDeviceAddress = device.getAddress();
-        FileLog.d(TAG, "Connecting to: " + device.getName() + " (" + currentDeviceAddress + ")");
+        FileLog.d(TAG + ": Connecting to: " + device.getName() + " (" + currentDeviceAddress + ")");
         bluetoothGatt = device.connectGatt(ApplicationLoader.applicationContext, false, gattCallback);
     }
 

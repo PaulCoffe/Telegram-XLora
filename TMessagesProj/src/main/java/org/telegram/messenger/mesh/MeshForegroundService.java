@@ -38,7 +38,7 @@ public class MeshForegroundService extends Service {
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("MeshCore Active")
                 .setContentText("Maintaining LoRa connection...")
-                .setSmallIcon(R.drawable.stat_sys_phone_call) // Placeholder
+                .setSmallIcon(R.drawable.mini_call_out_16) // Use existing valid icon
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .build();
