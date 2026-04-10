@@ -10853,14 +10853,17 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 return messagesController.getDialogs(folderId);
             } else if (dialogFilter.id == MessagesController.MESH_FILTER_ID) {
                 ArrayList<TLRPC.Dialog> meshDialogs = new ArrayList<>();
-                List<org.telegram.messenger.mesh.MeshStorage.MeshChannel> channels = org.telegram.messenger.mesh.MeshStorage.getInstance().getChannels();
-                for (org.telegram.messenger.mesh.MeshStorage.MeshChannel channel : channels) {
+                java.util.ArrayList<org.telegram.messenger.mesh.MeshStorage.LoraChannel> channels =
+                        org.telegram.messenger.mesh.MeshStorage.getInstance().getLoraChannels();
+                for (org.telegram.messenger.mesh.MeshStorage.LoraChannel channel : channels) {
+                    if (channel.name == null || channel.name.isEmpty()) continue; // skip uninitialized slots
                     org.telegram.messenger.mesh.MeshDialog meshDialog = new org.telegram.messenger.mesh.MeshDialog();
-                    meshDialog.id = - (2000000000L + channel.hash); // Unique negative ID range for Mesh
+                    meshDialog.id = org.telegram.messenger.mesh.MeshStorage.channelDialogId(channel.slotIndex);
                     meshDialog.top_message = 0;
-                    meshDialog.unread_count = 0; // TODO: Implement unread count
+                    meshDialog.unread_count = 0;
                     meshDialog.meshName = channel.name;
-                    meshDialog.lastMessage = org.telegram.messenger.mesh.MeshStorage.getInstance().getLastMessage(channel.hash);
+                    meshDialog.lastMessage = org.telegram.messenger.mesh.MeshStorage.getInstance()
+                            .getLastChannelMessageText(channel.slotIndex);
                     meshDialogs.add(meshDialog);
 
                     // Cache the dialog so DialogCell can find it
@@ -10868,7 +10871,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
                     // Create/update mock chat for name display
                     TLRPC.TL_chat chat = new TLRPC.TL_chat();
-                    chat.id = meshDialog.id; // Matches dialog ID
+                    chat.id = meshDialog.id;
                     chat.title = channel.name;
                     messagesController.putChat(chat, false);
                 }

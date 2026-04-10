@@ -4929,7 +4929,8 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
 
                 if (!ApplicationLoader.isNetworkOnline() && org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled()) {
                     if (newMsg.message != null && !newMsg.message.isEmpty()) {
-                        org.telegram.messenger.mesh.MeshManager.getInstance().sendData(newMsg.message.getBytes());
+                        // Route outgoing TG message to primary LoRa channel (slot 0) when offline
+                        org.telegram.messenger.mesh.MeshManager.getInstance().sendChannelMessage(0, newMsg.message);
                     }
                 }
 
