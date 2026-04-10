@@ -97,6 +97,7 @@ public class MeshManager {
     private BluetoothGattCharacteristic rxCharacteristic;
 
     private boolean isScanning    = false;
+    private boolean isConnecting  = false;
     private boolean isConnected   = false;
     private boolean isHandshakeComplete = false;
 
@@ -237,6 +238,7 @@ public class MeshManager {
 
     // ---- State getters ----
     public boolean isScanning()         { return isScanning; }
+    public boolean isConnecting()       { return isConnecting; }
     public boolean isConnected()        { return isConnected; }
     public boolean isHandshakeComplete(){ return isHandshakeComplete; }
 
@@ -425,17 +427,32 @@ public class MeshManager {
         currentDeviceAddress = device.getAddress();
 
         if (bluetoothGatt != null) {
-            bluetoothGatt.close();
+            try {
+                bluetoothGatt.close();
+            } catch (Exception ignored) {}
             bluetoothGatt = null;
         }
         writeQueue.clear();
         isWriting = false;
         isHandshakeComplete = false;
+        isConnecting = true;
 
         FileLog.d(TAG + ": Connecting to " + currentDeviceAddress + "...");
-        // autoConnect=false for reliable first-time connection
-        bluetoothGatt = device.connectGatt(ApplicationLoader.applicationContext, false, gattCallback,
-                BluetoothDevice.TRANSPORT_LE);
+        handler.post(() -> { for (MeshManagerListener l : listeners) l.onConnectionStateChanged(false); });
+        
+        try {
+            // autoConnect=false for reliable first-time connection
+            bluetoothGatt = device.connectGatt(ApplicationLoader.applicationContext, false, gattCallback,
+                    BluetoothDevice.TRANSPORT_LE);
+        } catch (SecurityException e) {
+            FileLog.e(TAG + ": SecurityException allocating GATT. Missing permissions?", e);
+            isConnecting = false;
+            handler.post(() -> Toast.makeText(ApplicationLoader.applicationContext, "Ошибка доступа к Bluetooth (SecurityException)", Toast.LENGTH_LONG).show());
+        } catch (Exception e) {
+            FileLog.e(TAG + ": Unknown exception calling connectGatt", e);
+            isConnecting = false;
+            handler.post(() -> Toast.makeText(ApplicationLoader.applicationContext, "Неизвестная ошибка: " + e.getMessage(), Toast.LENGTH_LONG).show());
+        }
     }
 
     private void scheduleReconnect() {
@@ -478,15 +495,21 @@ public class MeshManager {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 FileLog.d(TAG + ": GATT connected [status=" + status + "], discovering services...");
                 isConnected = true;
+                isConnecting = false;
                 reconnectAttempts = 0;
                 gattErrorStreak = 0; // Phase 7.5: reset error streak on successful connect
                 // Step 1: Discover services
-                gatt.discoverServices();
+                try {
+                    gatt.discoverServices();
+                } catch (SecurityException e) {
+                    FileLog.e(TAG + ": No permission for discoverServices", e);
+                }
                 handler.post(() -> { for (MeshManagerListener l : listeners) l.onConnectionStateChanged(true); });
 
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 FileLog.d(TAG + ": GATT disconnected [status=" + status + "]");
                 isConnected = false;
+                isConnecting = false;
                 isHandshakeComplete = false;
                 isWriting = false;
                 writeQueue.clear();

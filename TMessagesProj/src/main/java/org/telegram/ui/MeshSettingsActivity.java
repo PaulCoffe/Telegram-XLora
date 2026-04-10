@@ -107,6 +107,8 @@ public class MeshSettingsActivity extends BaseFragment
             } else {
                 items.add(UItem.asButton(0, "Синхронизация…", "Идёт рукопожатие с устройством"));
             }
+        } else if (MeshManager.getInstance().isConnecting()) {
+            items.add(UItem.asButton(0, "Соединение…", "Подключение по Bluetooth"));
         } else {
             items.add(UItem.asButton(0, "Не подключено", "Нажмите 'Поиск' ниже"));
         }
