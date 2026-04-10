@@ -6819,8 +6819,8 @@ public class ChatAttachAlert extends BottomSheet implements NotificationCenter.N
     public static class SearchFadeView extends View {
         private final int bgKeyColor;
         private final Theme.ResourcesProvider resourcesProvider;
-        private final GradientProtectionDrawable gradientProtectionDrawable = new GradientProtectionDrawable(WindowInsetsCompat.Side.TOP);
-        private final GradientProtectionDrawable gradientProtectionDrawable2 = new GradientProtectionDrawable(WindowInsetsCompat.Side.TOP);
+        private final GradientProtectionDrawable gradientProtectionDrawable = new GradientProtectionDrawable(GradientProtectionDrawable.TOP);
+        private final GradientProtectionDrawable gradientProtectionDrawable2 = new GradientProtectionDrawable(GradientProtectionDrawable.TOP);
 
         public SearchFadeView(Context context, int bgKeyColor, Theme.ResourcesProvider resourcesProvider) {
             super(context);

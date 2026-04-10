@@ -12,38 +12,52 @@ import android.view.animation.Interpolator;
 import android.view.animation.PathInterpolator;
 
 import androidx.annotation.ColorInt;
+import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
-import androidx.core.view.WindowInsetsCompat;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 
 import org.telegram.ui.ActionBar.Theme;
 
 public class GradientProtectionDrawable extends Drawable {
+
+    // Side constants mirroring WindowInsetsCompat.Side (not accessible as public @IntDef)
+    public static final int LEFT   = 1;
+    public static final int TOP    = 2;
+    public static final int RIGHT  = 4;
+    public static final int BOTTOM = 8;
+
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({LEFT, TOP, RIGHT, BOTTOM})
+    public @interface InsetsSide {}
+
     private final Interpolator mInterpolator;
 
     private final GradientDrawable mDrawable;
     private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Rect mInsets = new Rect();
-    private @WindowInsetsCompat.Side.InsetsSide int mSide;
+    private @InsetsSide int mSide;
 
     private final int[] mColors;
     private int mColor;
     private int mAlpha = 255;
 
     public GradientProtectionDrawable(
-        @WindowInsetsCompat.Side.InsetsSide int side) {
+        @InsetsSide int side) {
         this(side, 0, DEFAULT_INTERPOLATOR, 8);
     }
 
     public GradientProtectionDrawable(
-            @WindowInsetsCompat.Side.InsetsSide int side,
+            @InsetsSide int side,
             @ColorInt int color) {
         this(side, color, DEFAULT_INTERPOLATOR, 8);
     }
 
     public GradientProtectionDrawable(
-        @WindowInsetsCompat.Side.InsetsSide int side,
+        @InsetsSide int side,
         @ColorInt int color,
         Interpolator interpolator,
         int n
@@ -56,19 +70,19 @@ public class GradientProtectionDrawable extends Drawable {
         setColor(color);
     }
 
-    public void setSide(@WindowInsetsCompat.Side.InsetsSide int side) {
+    public void setSide(@InsetsSide int side) {
         this.mSide = side;
         switch (side) {
-            case WindowInsetsCompat.Side.LEFT:
+            case LEFT:
                 mDrawable.setOrientation(GradientDrawable.Orientation.LEFT_RIGHT);
                 break;
-            case WindowInsetsCompat.Side.TOP:
+            case TOP:
                 mDrawable.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
                 break;
-            case WindowInsetsCompat.Side.RIGHT:
+            case RIGHT:
                 mDrawable.setOrientation(GradientDrawable.Orientation.RIGHT_LEFT);
                 break;
-            case WindowInsetsCompat.Side.BOTTOM:
+            case BOTTOM:
                 mDrawable.setOrientation(GradientDrawable.Orientation.BOTTOM_TOP);
                 break;
         }
@@ -109,13 +123,13 @@ public class GradientProtectionDrawable extends Drawable {
         Rect bounds = getBounds();
 
         if (!bounds.isEmpty()) {
-            if (mSide == WindowInsetsCompat.Side.LEFT && mInsets.left > 0) {
+            if (mSide == LEFT && mInsets.left > 0) {
                 canvas.drawRect(bounds.left, bounds.top, Math.min(bounds.right, bounds.left + mInsets.left), bounds.bottom, mPaint);
-            } else if (mSide == WindowInsetsCompat.Side.TOP && mInsets.top > 0) {
+            } else if (mSide == TOP && mInsets.top > 0) {
                 canvas.drawRect(bounds.left, bounds.top, bounds.right, Math.min(bounds.bottom, bounds.top + mInsets.top), mPaint);
-            } else if (mSide == WindowInsetsCompat.Side.RIGHT && mInsets.right > 0) {
+            } else if (mSide == RIGHT && mInsets.right > 0) {
                 canvas.drawRect(Math.max(bounds.left, bounds.right - mInsets.right), bounds.top, bounds.right, bounds.bottom, mPaint);
-            } else if (mSide == WindowInsetsCompat.Side.BOTTOM && mInsets.bottom > 0) {
+            } else if (mSide == BOTTOM && mInsets.bottom > 0) {
                 canvas.drawRect(bounds.left, Math.max(bounds.top, bounds.bottom - mInsets.bottom), bounds.right, bounds.bottom, mPaint);
             }
         }

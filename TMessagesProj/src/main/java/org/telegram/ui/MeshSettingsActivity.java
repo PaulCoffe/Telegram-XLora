@@ -20,6 +20,7 @@ import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalRecyclerView;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class MeshSettingsActivity extends BaseFragment implements MeshManager.MeshManagerListener, NotificationCenter.NotificationCenterDelegate {
 
