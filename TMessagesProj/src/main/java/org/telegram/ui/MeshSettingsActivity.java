@@ -65,7 +65,16 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
         items.add(UItem.asShadow(null));
 
         items.add(UItem.asShadow(null));
-        items.add(UItem.asButton(100, "Поиск устройств MeshCore"));
+        items.add(UItem.asButton(100, MeshManager.getInstance().isScanning() ? "Остановка поиска..." : "Поиск устройств MeshCore").accent());
+
+        ArrayList<String> foundDevices = MeshManager.getInstance().getFoundDevices();
+        if (!foundDevices.isEmpty()) {
+            items.add(UItem.asHeader("Найденные устройства"));
+            for (int i = 0; i < foundDevices.size(); i++) {
+                String dev = foundDevices.get(i);
+                items.add(UItem.asButton(2 + i, dev.split("\n")[0], dev.contains("\n") ? dev.split("\n")[1] : ""));
+            }
+        }
 
         ArrayList<MeshStorage.MeshNode> nodes = MeshStorage.getInstance().getAllNodes();
         if (!nodes.isEmpty()) {
@@ -92,7 +101,12 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
             }
             listView.adapter.update(true);
         } else if (item.id == 100) {
-            checkPermissionsAndScan();
+            if (MeshManager.getInstance().isScanning()) {
+                MeshManager.getInstance().stopScanning();
+            } else {
+                checkPermissionsAndScan();
+            }
+            listView.adapter.update(true);
         } else if (item.id >= 2 && item.id < 100) {
             ArrayList<String> devices = MeshManager.getInstance().getFoundDevices();
             int idx = item.id - 2;
@@ -257,6 +271,12 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
                 if (result != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                     allGranted = false;
                     break;
+                }
+            }
+            if (allGranted) {
+                MeshManager.getInstance().startScanning();
+                if (listView != null) {
+                    listView.adapter.update(true);
                 }
             }
         }

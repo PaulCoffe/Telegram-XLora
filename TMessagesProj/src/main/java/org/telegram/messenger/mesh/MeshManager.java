@@ -182,8 +182,18 @@ public class MeshManager {
         try {
             isScanning = true;
             foundDevices.clear();
-            scanner.startScan(scanCallback);
-            FileLog.d(TAG + ": Scan started successfully");
+            
+            android.bluetooth.le.ScanSettings settings = new android.bluetooth.le.ScanSettings.Builder()
+                .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .build();
+                
+            java.util.List<android.bluetooth.le.ScanFilter> filters = new java.util.ArrayList<>();
+            filters.add(new android.bluetooth.le.ScanFilter.Builder()
+                .setServiceUuid(new android.os.ParcelUuid(UART_SERVICE_UUID))
+                .build());
+
+            scanner.startScan(filters, settings, scanCallback);
+            FileLog.d(TAG + ": Scan started with filters and low latency");
             Toast.makeText(ApplicationLoader.applicationContext, "Поиск устройств MeshCore...", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
             FileLog.e(TAG + ": Exception starting scan: " + e.getMessage());
@@ -219,6 +229,17 @@ public class MeshManager {
         public void onScanResult(int callbackType, ScanResult result) {
             BluetoothDevice device = result.getDevice();
             if (device != null) {
+                String name = null;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (ActivityCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                        name = device.getName();
+                    }
+                } else {
+                    name = device.getName();
+                }
+                
+                if (name == null) name = "Mesh Device";
+
                 boolean exists = false;
                 for (BluetoothDevice d : foundDevices) {
                     if (d.getAddress().equals(device.getAddress())) {
@@ -239,6 +260,12 @@ public class MeshManager {
                 stopScanning();
                 connectToDevice(device);
             }
+        }
+
+        @Override
+        public void onScanFailed(int errorCode) {
+            FileLog.e(TAG + ": Scan failed with error: " + errorCode);
+            isScanning = false;
         }
     };
 
@@ -302,6 +329,10 @@ public class MeshManager {
                     l.onConnectionStateChanged(true);
                 }
                 gatt.discoverServices();
+                // Request larger MTU for MeshCore packets
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    gatt.requestMtu(512);
+                }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 FileLog.d(TAG + ": GATT Disconnected");
                 isConnected = false;
