@@ -363,7 +363,9 @@ public class ApplicationLoader extends Application {
             editorCA.commit();
             ConnectionsManager.getInstance(UserConfig.selectedAccount).setPushConnectionEnabled(true);
         }
-        pendingIntentFlags = PendingIntent.FLAG_IMMUTABLE;
+        final int pendingIntentFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                ? PendingIntent.FLAG_IMMUTABLE
+                : 0;
         if (enabled) {
             Log.d("TFOSS", "Trying to start push service every minute");
             // Telegram-FOSS: unconditionally enable push service
