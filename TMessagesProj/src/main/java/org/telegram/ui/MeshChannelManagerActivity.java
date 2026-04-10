@@ -137,9 +137,7 @@ public class MeshChannelManagerActivity extends BaseFragment
 
             if (ch != null && !ch.name.isEmpty()) {
                 // Open chat for this slot
-                MeshChatActivity chatActivity = new MeshChatActivity();
-                chatActivity.setArguments(MeshChatActivity.channelArgs(slotIdx, ch.name));
-                presentFragment(chatActivity);
+                presentFragment(new MeshChatActivity(MeshChatActivity.channelArgs(slotIdx, ch.name)));
             } else {
                 // Prompt to create / name this slot
                 showCreateSlotDialog(slotIdx);
@@ -168,9 +166,7 @@ public class MeshChannelManagerActivity extends BaseFragment
         b.setItems(options, (dialog, which) -> {
             if (slotIdx == 0) {
                 // Slot 0: always public channel — open chat
-                MeshChatActivity chatActivity = new MeshChatActivity();
-                chatActivity.setArguments(MeshChatActivity.channelArgs(0, "Primary"));
-                presentFragment(chatActivity);
+                presentFragment(new MeshChatActivity(MeshChatActivity.channelArgs(0, "Primary")));
                 return;
             }
             switch (which) {

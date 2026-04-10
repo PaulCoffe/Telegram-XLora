@@ -305,9 +305,7 @@ public class MeshSettingsActivity extends BaseFragment
         b.setItems(options.toArray(new CharSequence[0]), (dialog, which) -> {
             if (which == 0) {
                 // Open Mesh DM chat
-                MeshChatActivity chatActivity = new MeshChatActivity();
-                chatActivity.setArguments(MeshChatActivity.contactArgs(node.pubkey, node.nickname));
-                presentFragment(chatActivity);
+                presentFragment(new MeshChatActivity(MeshChatActivity.contactArgs(node.pubkey, node.nickname)));
 
             } else if (which == 1) {
                 if (node.tgUserId != 0) {

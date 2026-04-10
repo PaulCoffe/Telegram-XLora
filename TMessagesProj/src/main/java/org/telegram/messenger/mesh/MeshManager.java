@@ -213,7 +213,7 @@ public class MeshManager {
                 abortBroadcast();
                 FileLog.d(TAG + ": Auto-confirmed PIN pairing with default 123456");
             } else if (variant == BluetoothDevice.PAIRING_VARIANT_PASSKEY_CONFIRMATION ||
-                       variant == BluetoothDevice.PAIRING_VARIANT_CONSENT) {
+                       variant == 3 /* PAIRING_VARIANT_CONSENT — hidden API, value = 3 */) {
                 device.setPairingConfirmation(true);
                 abortBroadcast();
                 FileLog.d(TAG + ": Auto-confirmed numeric comparison / consent pairing");

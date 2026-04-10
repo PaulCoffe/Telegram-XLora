@@ -47,6 +47,10 @@ import java.util.Locale;
  */
 public class MeshChatActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
 
+    public MeshChatActivity(Bundle args) {
+        super(args);
+    }
+
     // ---- Bundle argument keys ----
     public static final String ARG_MODE       = "mode";
     public static final String ARG_CHANNEL_INDEX = "channel_index";
@@ -200,13 +204,19 @@ public class MeshChatActivity extends BaseFragment implements NotificationCenter
     }
 
     @Override
-    public void onFragmentViewCreated() {
-        // Subscribe to incoming message events
+    public void onResume() {
+        super.onResume();
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didReceiveMeshChannelMessage);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didReceiveMeshContactMessage);
-
         // Load message history (async → post to UI thread)
         loadMessages();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.didReceiveMeshChannelMessage);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.didReceiveMeshContactMessage);
     }
 
     @Override
