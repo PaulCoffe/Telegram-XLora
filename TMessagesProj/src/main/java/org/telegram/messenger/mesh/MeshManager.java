@@ -604,12 +604,15 @@ public class MeshManager {
      */
     private void sendAppStart() {
         byte[] appName = "Telegram-XLora".getBytes(StandardCharsets.UTF_8);
-        // 8 header bytes + app name
+        // Protocol: [CMD=0x01][proto_ver=0x01][reserved x6][app_name_UTF8]
+        // proto_ver MUST be 0x01 — device validates this in the handshake.
+        // Sending 0x00 here causes the device to silently discard the packet.
         byte[] packet = new byte[8 + appName.length];
-        packet[0] = CMD_APP_START; // 0x01
-        // bytes 1-7: reserved, stay 0x00
+        packet[0] = CMD_APP_START; // 0x01 = command ID
+        packet[1] = 0x01;          // protocol version = 1  ← CRITICAL: was missing
+        // bytes 2-7: reserved, stay 0x00
         System.arraycopy(appName, 0, packet, 8, appName.length);
-        FileLog.d(TAG + ": Sending CMD_APP_START (" + packet.length + " bytes)");
+        FileLog.d(TAG + ": Sending CMD_APP_START proto_ver=1 app='Telegram-XLora' (" + packet.length + " bytes)");
         enqueueWrite(packet);
     }
 
@@ -795,6 +798,12 @@ public class MeshManager {
                 } else {
                     FileLog.d(TAG + ": PACKET_ACK (no payload)");
                 }
+                break;
+
+            case PACKET_MSG_SENT:
+                // Device accepted the message for transmission over LoRa radio.
+                // No further handshake action needed; the write queue drains automatically.
+                FileLog.d(TAG + ": PACKET_MSG_SENT — message accepted by radio");
                 break;
 
             default:
@@ -1215,16 +1224,44 @@ public class MeshManager {
         if (isConnected && isHandshakeComplete) sendSyncNextMessage();
     }
 
-    /** Send radio config — CMD_SET_CHANNEL_CONFIG (index 0, primary channel) */
-    public void sendRadioConfig(long freq, float bw, int sf, int cr) {
-        if (bluetoothGatt == null) return;
-        // [0x20][idx=0][name 32 bytes null][secret 16 bytes null] = SET_CHANNEL
-        // Actually radio config is part of the channel setup in MeshCore.
-        // The radio parameters are embedded in the channel data and configured on device.
-        // For now log intent and show toast.
-        FileLog.d(TAG + ": Radio config update: freq=" + freq + " bw=" + bw + " sf=" + sf + " cr=" + cr);
-        handler.post(() -> Toast.makeText(ApplicationLoader.applicationContext,
-                "Настройки радио будут применены при следующем подключении", Toast.LENGTH_SHORT).show());
+    /**
+     * Sends radio configuration to device — CMD_SET_RADIO_PARAMS (0x0B).
+     * Format (Little-Endian):
+     *   [0x0B][freq 4 bytes LE][bw 4 bytes LE][sf 1 byte][cr 1 byte]
+     *
+     * @param freq   frequency in Hz (e.g. 868731018)
+     * @param bwKHz  bandwidth in kHz (e.g. 62.5). Converted to Hz internally.
+     * @param sf     Spreading Factor (7-12)
+     * @param cr     Coding Rate (5-8, meaning 4/5 to 4/8)
+     */
+    public void sendRadioConfig(long freq, float bwKHz, int sf, int cr) {
+        if (!isConnected || rxCharacteristic == null) {
+            FileLog.e(TAG + ": Cannot send radio config — not connected");
+            return;
+        }
+        // Convert bandwidth from kHz to Hz (device expects Hz)
+        long bwHz = (long)(bwKHz * 1000.0f);
+
+        byte[] packet = new byte[11];
+        packet[0]  = 0x0B;  // CMD_SET_RADIO_PARAMS
+        // Frequency (Little-Endian uint32)
+        packet[1]  = (byte)(freq & 0xFF);
+        packet[2]  = (byte)((freq >> 8) & 0xFF);
+        packet[3]  = (byte)((freq >> 16) & 0xFF);
+        packet[4]  = (byte)((freq >> 24) & 0xFF);
+        // Bandwidth in Hz (Little-Endian uint32)
+        packet[5]  = (byte)(bwHz & 0xFF);
+        packet[6]  = (byte)((bwHz >> 8) & 0xFF);
+        packet[7]  = (byte)((bwHz >> 16) & 0xFF);
+        packet[8]  = (byte)((bwHz >> 24) & 0xFF);
+        // Spreading Factor
+        packet[9]  = (byte)(sf & 0xFF);
+        // Coding Rate
+        packet[10] = (byte)(cr & 0xFF);
+
+        FileLog.d(TAG + ": Sending CMD_SET_RADIO_PARAMS freq=" + freq
+                + " bwHz=" + bwHz + " sf=" + sf + " cr=" + cr);
+        enqueueWrite(packet);
     }
 
     // ============================================================
