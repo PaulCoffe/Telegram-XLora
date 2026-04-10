@@ -55,14 +55,15 @@ default void onSelfInfoLoaded(String pubKeyHex, String name, long freqHz, float 
 **Supported commands**:
 | Method | CMD byte | Description |
 |--------|----------|-------------|
-| `sendAppStart()` | `0x01` | Init handshake |
+| `sendAppStart()` | `0x01` | Init handshake (sends proto_ver=1) |
 | `sendDeviceQuery()` | `0x16 0x03` | Fetch device info |
 | `sendGetChannel(idx)` | `0x1F` | Fetch channel slot |
 | `sendSetChannel(idx, name, secret)` | `0x20` | Create/update channel |
 | `sendChannelMessage(idx, text)` | `0x03 0x00` | Send to channel slot |
+| `sendContactMessage(pubkey, text)` | `0x02` | Send DM (with txt_type and attempt bytes) |
 | `sendGetMessage()` | `0x0A` | Poll queued messages |
 | `sendGetBattery()` | `0x14` | Battery + storage |
-| `sendRadioConfig(freq, bw, sf, cr)` | `0x16 0x04` | Set radio params |
+| `sendRadioConfig(freq, bw, sf, cr)` | `0x0B` | Set radio params (Little-Endian uint32) |
 
 ---
 
@@ -167,7 +168,9 @@ CREATE TABLE device_pins (
 ---
 
 ## 7. Security
-- **BLE**: Standard Bluetooth Bonding + PIN (auto-confirmed using stored PINs from `PACKET_DEVICE_INFO`)
+- **BLE Authentication**: Standard Bluetooth LE Secure Connections (OOB, Numeric Comparison, or Passkey Entry). The app listens for `ACTION_PAIRING_REQUEST`. 
+  - Dynamic passkey requests (where the MeshCore OLED shows a 6-digit PIN) display the native Android system prompt for user input.
+  - Consent/Numeric Comparison flows are auto-confirmed.
 - **LoRa channel encryption**: MeshCore firmware handles payload encryption using the 16-byte channel secret
 - **Key storage**: Channel secrets stored in `lora_channels.secret_hex`; never logged
 
@@ -192,7 +195,8 @@ CREATE TABLE device_pins (
 | 2026-04-07 | v2 | BLE stability fixes: WriteQueue, MTU 512, GATT_ERROR handling |
 | 2026-04-08 | v3 | MeshStorage v2: device_pins table; radio config persistence |
 | 2026-04-09 | v4 | MeshForegroundService; MeshSettingsActivity; channel presets |
-| 2026-04-10 | **v5** | **Protocol alignment with companion_protocol.md v1.12.0+**: typed callbacks, DB v3, lora_channels, sendSetChannel, public channel key seeding |
+| 2026-04-10 | **v5** | **Protocol alignment phase 1**: typed callbacks, DB v3, lora_channels, public channel key seeding |
+| 2026-04-10 | **v6** | **Protocol alignment phase 2**: CMD_SET_RADIO_PARAMS(0x0B), CMD_SEND_TXT_MSG(0x02) packet mapping, and BLE Passkey Entry native UI fixes. |
 
 ---
 

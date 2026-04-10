@@ -1,5 +1,27 @@
 # DEVELOPMENT HISTORY
 
+## [2026-04-10] Phase 9: Wireless Protocol Alignment & Dynamic Pairing (mesh-dev)
+
+### Objective
+Achieve 100% byte-for-byte protocol compatibility with the official `MeshCore` firmware and fix the Bluetooth Secure Connections (Passkey) pairing flow.
+
+### Changes
+1. **Bluetooth Pairing Flow Fixed**:
+   - Removed the hardcoded `123456` PIN injection and `abortBroadcast()` for `PAIRING_VARIANT_PIN` & `PAIRING_VARIANT_PASSKEY`.
+   - Android will now correctly display the native system popup prompting the user to enter the 6-digit dynamic physical passkey displayed on the MeshCore device OLED screen.
+2. **Handshake Verification**:
+   - Added the missing `protocol_version` byte (`0x01`) to `CMD_APP_START (0x01)`, allowing the firmware to properly accept the handshake sequence.
+3. **Private Messages Payload Structure**:
+   - Rewrote `sendContactMessage` (`CMD_SEND_TXT_MSG - 0x02`) payload structure.
+   - Injected missing `txt_type (0x00)` and `attempt (0x00)` bytes to conform to the 13-byte header requirement of `companion_protocol.md`.
+4. **Radio Configuration Implemented**:
+   - Replaced placeholder stub in `sendRadioConfig` with actual `CMD_SET_RADIO_PARAMS (0x0B)` execution. 
+   - Uses Little-Endian 4-byte integers for Frequency Hz and Bandwidth Hz.
+5. **Write Queue Stability**:
+   - Added handling for `PACKET_MSG_SENT (0x06)` in `processResponse()` so the command queue drains immediately after radio acceptance.
+
+---
+
 ## [2026-04-10] Phase 8: Final Audit & Codebase Cleanup (mesh-dev)
 
 ### Objective

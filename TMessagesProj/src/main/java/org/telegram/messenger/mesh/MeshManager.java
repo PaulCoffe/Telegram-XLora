@@ -413,8 +413,9 @@ public class MeshManager {
     public void connect(String addressWithInfo) {
         String address = addressWithInfo.contains("\n")
                 ? addressWithInfo.split("\n")[1] : addressWithInfo;
+        address = address.trim();
         for (BluetoothDevice d : foundDevices) {
-            if (d.getAddress().equals(address)) {
+            if (d.getAddress() != null && d.getAddress().trim().equalsIgnoreCase(address)) {
                 MeshTransportManager.getInstance().setSelectedDeviceAddress(address);
                 connectToDevice(d);
                 break;
@@ -425,6 +426,8 @@ public class MeshManager {
     private void connectToDevice(BluetoothDevice device) {
         if (device == null) return;
         currentDeviceAddress = device.getAddress();
+
+        stopScanning(); // Highly recommended before connecting
 
         if (bluetoothGatt != null) {
             try {

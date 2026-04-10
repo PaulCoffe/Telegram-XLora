@@ -24140,6 +24140,7 @@ public class MessagesController extends BaseController implements NotificationCe
             d.lastMessage = storage.getLastChannelMessageText(ch.slotIndex);
             d.top_message = 0;
             d.last_message_date = (int) (System.currentTimeMillis() / 1000L);
+            d.channelSlot = ch.slotIndex;
             result.add(d);
         }
 
@@ -24158,6 +24159,7 @@ public class MessagesController extends BaseController implements NotificationCe
             d.lastMessage = storage.getLastContactMessageText(c.pubKeyHex);
             d.top_message = 0;
             d.last_message_date = (int) (System.currentTimeMillis() / 1000L);
+            d.pubKeyHex = c.pubKeyHex;
             result.add(d);
         }
 
