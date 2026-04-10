@@ -1113,15 +1113,23 @@ public class MeshManager {
             pubBytes[i] = (byte) Integer.parseInt(pubKeyHex.substring(i * 2, i * 2 + 2), 16);
         }
         int ts = (int) (System.currentTimeMillis() / 1000L);
-        // Packet: [0x02][pub 6 bytes][ts LE 4 bytes][text]
-        byte[] packet = new byte[11 + textBytes.length];
+        // Header size: 1(CMD) + 1(txt_type) + 1(attempt) + 4(ts) + 6(pubkey) = 13 bytes
+        byte[] packet = new byte[13 + textBytes.length];
         packet[0] = 0x02;  // CMD_SEND_MSG
-        System.arraycopy(pubBytes, 0, packet, 1, 6);
-        packet[7]  = (byte) (ts & 0xFF);
-        packet[8]  = (byte) ((ts >> 8) & 0xFF);
-        packet[9]  = (byte) ((ts >> 16) & 0xFF);
-        packet[10] = (byte) ((ts >> 24) & 0xFF);
-        System.arraycopy(textBytes, 0, packet, 11, textBytes.length);
+        packet[1] = 0x00;  // txt_type (0 = Plain text)
+        packet[2] = 0x00;  // attempt (retry count)
+        
+        // Timestamp (4 bytes Little-Endian)
+        packet[3]  = (byte) (ts & 0xFF);
+        packet[4]  = (byte) ((ts >> 8) & 0xFF);
+        packet[5]  = (byte) ((ts >> 16) & 0xFF);
+        packet[6]  = (byte) ((ts >> 24) & 0xFF);
+        
+        // PubKey Prefix (6 bytes)
+        System.arraycopy(pubBytes, 0, packet, 7, 6);
+        
+        // Text payload
+        System.arraycopy(textBytes, 0, packet, 13, textBytes.length);
 
         final String finalPub = pubKeyHex;
         Runnable saveToHistory = () ->
