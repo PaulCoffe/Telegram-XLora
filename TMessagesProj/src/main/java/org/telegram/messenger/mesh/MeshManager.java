@@ -280,16 +280,15 @@ public class MeshManager {
                     .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY)
                     .build();
 
-            // Filter by UART service UUID → only MeshCore devices appear
-            List<android.bluetooth.le.ScanFilter> filters = new ArrayList<>();
-            filters.add(new android.bluetooth.le.ScanFilter.Builder()
-                    .setServiceUuid(new android.os.ParcelUuid(UART_SERVICE_UUID))
-                    .build());
-
-            scanner.startScan(filters, settings, scanCallback);
-            FileLog.d(TAG + ": BLE scan started (NUS filter)");
+            // NOTE: We intentionally scan WITHOUT a UUID filter.
+            // Many MeshCore devices (Heltec T114, LilyGO T3S3) do NOT include the NUS service
+            // UUID in their advertising packet — they only expose it after GATT connection.
+            // Filtering by UUID here would silently drop those devices.
+            // We instead filter by device name in onScanResult (see MESHCORE_NAME_KEYWORDS).
+            scanner.startScan(null, settings, scanCallback);
+            FileLog.d(TAG + ": BLE scan started (no UUID filter — name filter applied in callback)");
             handler.post(() -> Toast.makeText(ApplicationLoader.applicationContext,
-                    "Поиск устройств MeshCore...", Toast.LENGTH_SHORT).show());
+                    "Поиск MeshCore устройств...", Toast.LENGTH_SHORT).show());
         } catch (Exception e) {
             FileLog.e(TAG + ": Failed to start scan", e);
             isScanning = false;
@@ -323,6 +322,25 @@ public class MeshManager {
         handler.post(() -> { for (MeshManagerListener l : listeners) l.onDevicesUpdated(); });
     }
 
+    /**
+     * Keywords used to identify MeshCore-compatible devices by name.
+     * Devices are matched if their name contains any of these (case-insensitive).
+     * Devices with no name (null/empty) are also shown so completely unnamed devices
+     * can still be connected to by MAC address.
+     */
+    private static final String[] MESHCORE_NAME_KEYWORDS = {
+        "meshcore", "mesh", "heltec", "lilygo", "lora", "t114", "t3s3", "meshtastic"
+    };
+
+    private boolean isMeshCoreDevice(String name) {
+        if (name == null || name.isEmpty() || name.equals("Mesh Device")) return false;
+        String lower = name.toLowerCase();
+        for (String kw : MESHCORE_NAME_KEYWORDS) {
+            if (lower.contains(kw)) return true;
+        }
+        return false;
+    }
+
     private final ScanCallback scanCallback = new ScanCallback() {
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
@@ -331,13 +349,19 @@ public class MeshManager {
 
             String name = getDeviceName(device);
 
+            // Accept devices whose name matches MeshCore keywords OR that have no name
+            // (unnamed devices may still be MeshCore — user can try connecting by address)
+            if (!isMeshCoreDevice(name) && name != null && !name.isEmpty() && !name.equals("Mesh Device")) {
+                return; // skip non-MeshCore named devices
+            }
+
             boolean exists = false;
             for (BluetoothDevice d : foundDevices) {
                 if (d.getAddress().equals(device.getAddress())) { exists = true; break; }
             }
             if (!exists) {
                 foundDevices.add(device);
-                FileLog.d(TAG + ": Found device: " + name + " [" + device.getAddress() + "]");
+                FileLog.d(TAG + ": Found MeshCore candidate: " + name + " [" + device.getAddress() + "]");
                 handler.post(() -> { for (MeshManagerListener l : listeners) l.onDevicesUpdated(); });
             }
 
@@ -353,6 +377,8 @@ public class MeshManager {
         public void onScanFailed(int errorCode) {
             FileLog.e(TAG + ": Scan failed, error code: " + errorCode);
             isScanning = false;
+            handler.post(() -> Toast.makeText(ApplicationLoader.applicationContext,
+                    "Ошибка BLE сканирования (код: " + errorCode + ")", Toast.LENGTH_LONG).show());
         }
     };
 
