@@ -251,6 +251,9 @@ public class NotificationCenter {
 
     public static final int didRequestMeshPairing = totalEvents++;
     public static final int didUpdateMeshNodes = totalEvents++;
+    public static final int didReceiveMeshChannelMessage = totalEvents++;   // args: (int channelIndex, String text, String senderName)
+    public static final int didReceiveMeshContactMessage = totalEvents++;   // args: (String pubKeyHex, String text)
+    public static final int didMeshChannelsUpdated       = totalEvents++;   // args: none
     public static final int chatWasBoostedByUser = totalEvents++;
     public static final int groupPackUpdated = totalEvents++;
     public static final int timezonesUpdated = totalEvents++;

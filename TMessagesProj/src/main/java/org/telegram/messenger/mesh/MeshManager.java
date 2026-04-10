@@ -118,7 +118,44 @@ public class MeshManager {
     public interface MeshManagerListener {
         void onDevicesUpdated();
         void onConnectionStateChanged(boolean connected);
-        void onMessageReceived(byte[] data, int rssi, int hops);
+
+        /**
+         * Called when a LoRa channel message is received.
+         * @param channelIndex slot index (0-7)
+         * @param senderInfo   pubkey-prefix or node name (may be empty for channel 0)
+         * @param text         message text
+         * @param timestampSec Unix timestamp in seconds
+         * @param snr          SNR value (0 if not V3)
+         * @param hops         path length / hop count
+         */
+        default void onChannelMessage(int channelIndex, String senderInfo, String text,
+                                      long timestampSec, int snr, int hops) {}
+
+        /**
+         * Called when a direct contact message is received.
+         * @param pubKeyHex    hex pubkey prefix of sender
+         * @param text         message text
+         * @param timestampSec Unix timestamp
+         * @param snr          SNR (0 if not V3 packet)
+         * @param hops         path length
+         */
+        default void onContactMessage(String pubKeyHex, String text,
+                                      long timestampSec, int snr, int hops) {}
+
+        /**
+         * Called when a LoRa channel slot info is loaded from device.
+         * @param slotIndex 0-7
+         * @param name      channel name (empty = slot unused)
+         * @param secretHex 16-byte hex secret (MeshCore public key for slot 0)
+         * @param isPublic  true for slot 0 or hashtag-derived channels
+         */
+        default void onChannelLoaded(int slotIndex, String name, String secretHex, boolean isPublic) {}
+
+        /**
+         * Called when PACKET_SELF_INFO is parsed (response to CMD_APP_START).
+         */
+        default void onSelfInfoLoaded(String pubKeyHex, String name,
+                                      long freqHz, float bwKHz, int sf, int cr) {}
     }
 
     public void addListener(MeshManagerListener l)    { if (!listeners.contains(l)) listeners.add(l); }
@@ -696,33 +733,51 @@ public class MeshManager {
     // ============================================================
 
     private void parseSelfInfo(byte[] data) {
-        // PACKET_SELF_INFO (0x05): 58+ bytes
-        // [0] type, [1] adv_type, [2] tx_power, [3] max_tx_power,
-        // [4..35] public key (32 bytes), [36..47] lat+lon floats, ...
-        // [48..51] freq (Hz / 1000.0), [52..55] bw (Hz / 1000.0), [56] SF, [57] CR, [58+] name
-        if (data.length < 36) { FileLog.e(TAG + ": PACKET_SELF_INFO too short"); return; }
+        // PACKET_SELF_INFO (0x05) per companion_protocol.md:
+        // Byte 0: type
+        // Byte 1: adv_type, Byte 2: tx_power, Byte 3: max_tx_power
+        // Bytes 4-35: public key (32 bytes)
+        // Bytes 36-39: lat, 40-43: lon (int32 LE / 1e6)
+        // Byte 44: multi_acks, 45: adv_loc_policy, 46: telemetry_mode, 47: manual_add_contacts
+        // Bytes 48-51: freq (Hz, LE uint32), 52-55: bw (Hz / 1000.0), 56: SF, 57: CR
+        // Bytes 58+: device name (UTF-8, no null terminator)
+        if (data.length < 36) { FileLog.e(TAG + ": PACKET_SELF_INFO too short (" + data.length + ")"); return; }
 
         byte[] pubKey = Arrays.copyOfRange(data, 4, 36);
         String pubKeyHex = bytesToHex(pubKey);
 
         String name = "Unknown";
-        if (data.length > 58) {
-            name = new String(data, 58, data.length - 58, StandardCharsets.UTF_8)
-                    .replaceAll("\u0000", "").trim();
-        }
-
         long freqHz = 0;
         float bwKHz = 0;
         int sf = 0, cr = 0;
+
         if (data.length >= 58) {
             freqHz = byteArrayToInt(data, 48) & 0xFFFFFFFFL;
             bwKHz  = (byteArrayToInt(data, 52) & 0xFFFFFFFFL) / 1000.0f;
             sf     = data[56] & 0xFF;
             cr     = data[57] & 0xFF;
         }
+        if (data.length > 58) {
+            name = new String(data, 58, data.length - 58, StandardCharsets.UTF_8)
+                    .replaceAll("\u0000", "").trim();
+        }
 
-        FileLog.d(TAG + ": SELF_INFO: name=" + name + " pubkey=" + pubKeyHex.substring(0, 12) + "... freq=" + freqHz + " sf=" + sf);
+        FileLog.d(TAG + ": SELF_INFO name='" + name + "' pubkey=" + pubKeyHex.substring(0, Math.min(12, pubKeyHex.length())) + "... freq=" + freqHz + " bw=" + bwKHz + " sf=" + sf + " cr=" + cr);
+
+        final String finalPubKey = pubKeyHex;
+        final String finalName   = name;
+        final long   finalFreq   = freqHz;
+        final float  finalBw     = bwKHz;
+        final int    finalSf     = sf;
+        final int    finalCr     = cr;
+
         MeshStorage.getInstance().updateNode(pubKeyHex, name, 0, 0);
+
+        handler.post(() -> {
+            for (MeshManagerListener l : listeners) {
+                l.onSelfInfoLoaded(finalPubKey, finalName, finalFreq, finalBw, finalSf, finalCr);
+            }
+        });
     }
 
     private void parseDeviceInfo(byte[] data) {
@@ -751,29 +806,84 @@ public class MeshManager {
     }
 
     private void parseContact(byte[] data) {
-        // PACKET_CONTACT (0x03): brief contact info
-        // Full format TBD — log and store for now
+        // PACKET_CONTACT (0x03) per companion_protocol.md:
+        // Byte 0: 0x03 (type)
+        // Bytes 1-6: Public Key Prefix (6 bytes)
+        // Byte 7: Flags / adv_type
+        // Bytes 8+: Node name (UTF-8)
         if (data.length < 7) return;
-        FileLog.d(TAG + ": Contact received, len=" + data.length);
+        String pubKeyHex = bytesToHex(Arrays.copyOfRange(data, 1, 7));
+        String name = "";
+        if (data.length > 8) {
+            name = new String(data, 8, data.length - 8, StandardCharsets.UTF_8)
+                    .replaceAll("\u0000", "").trim();
+        }
+        FileLog.d(TAG + ": Contact pubkey=" + pubKeyHex + " name='" + name + "'");
+        MeshStorage.getInstance().updateNode(pubKeyHex, name.isEmpty() ? null : name, 0, 0);
     }
 
     private void parseChannelInfo(byte[] data) {
-        // PACKET_CHANNEL_INFO (0x12): [0] type, [1] channel_idx, [2-33] name, [34-49] secret
-        if (data.length < 34) return;
-        int idx = data[1] & 0xFF;
+        // PACKET_CHANNEL_INFO (0x12) per companion_protocol.md:
+        // Byte 0: 0x12
+        // Byte 1: Channel Index (0-7)
+        // Bytes 2-33: Channel Name (32 bytes, null-padded)
+        // Bytes 34-49: Secret (16 bytes)
+        // Total: 50 bytes minimum
+        if (data.length < 34) {
+            FileLog.e(TAG + ": PACKET_CHANNEL_INFO too short (" + data.length + ")");
+            return;
+        }
+        int idx  = data[1] & 0xFF;
         String name = new String(data, 2, 32, StandardCharsets.UTF_8)
                 .replaceAll("\u0000", "").trim();
-        FileLog.d(TAG + ": Channel[" + idx + "] name='" + name + "'");
+
+        // Parse 16-byte secret (if present)
+        String secretHex = MeshStorage.PUBLIC_CHANNEL_KEY_HEX; // default for slot 0
+        if (data.length >= 50) {
+            secretHex = bytesToHex(Arrays.copyOfRange(data, 34, 50));
+        }
+
+        // Slot 0 with all-zero secret → firmware uses public key; override with official key
+        boolean allZeroSecret = secretHex.matches("0{32}");
+        boolean isPublic = (idx == 0) || allZeroSecret;
+        if (idx == 0 && allZeroSecret) {
+            secretHex = MeshStorage.PUBLIC_CHANNEL_KEY_HEX;
+        }
+
+        FileLog.d(TAG + ": PACKET_CHANNEL_INFO slot[" + idx + "] name='" + name + "' public=" + isPublic);
+
+        // Persist to storage (async via storageQueue)
+        MeshStorage.getInstance().saveLoraChannel(idx, name, secretHex, isPublic);
+
+        final int    finalIdx      = idx;
+        final String finalName     = name;
+        final String finalSecret   = secretHex;
+        final boolean finalPublic  = isPublic;
+        handler.post(() -> {
+            for (MeshManagerListener l : listeners) {
+                l.onChannelLoaded(finalIdx, finalName, finalSecret, finalPublic);
+            }
+        });
     }
 
     private void parseContactMessage(byte[] data) {
-        // PACKET_CONTACT_MSG_RECV (0x07) or V3 (0x10)
+        // PACKET_CONTACT_MSG_RECV (0x07) or V3 (0x10) per companion_protocol.md
         boolean isV3 = (data[0] == PACKET_CONTACT_MSG_RECV_V3);
         int offset = 1;
         int snr = 0;
-        if (isV3) { snr = data[offset]; offset += 3; } // snr + 2 reserved
+        if (isV3) {
+            // V3: Byte 1 = SNR (signed, multiply by 4), Bytes 2-3 = reserved
+            int snrRaw = data[offset] & 0xFF;
+            snr = (snrRaw < 128 ? snrRaw : snrRaw - 256); // sign-extend
+            offset += 3;
+        }
 
-        if (data.length < offset + 11) return; // need pubkey(6) + path(1) + txttype(1) + ts(4)
+        // Minimum: pubkey(6) + pathLen(1) + txtType(1) + timestamp(4) = 12
+        if (data.length < offset + 12) {
+            FileLog.e(TAG + ": PACKET_CONTACT_MSG_RECV too short");
+            return;
+        }
+
         String pubKeyPrefix = bytesToHex(Arrays.copyOfRange(data, offset, offset + 6));
         offset += 6;
         int pathLen = data[offset] & 0xFF;
@@ -781,39 +891,63 @@ public class MeshManager {
         offset += 2;
         long timestamp = byteArrayToInt(data, offset) & 0xFFFFFFFFL;
         offset += 4;
-        if (txtType == 2) offset += 4; // skip signature
+        if (txtType == 2) offset += 4; // skip 4-byte signature
         if (offset >= data.length) return;
+
         String text = new String(data, offset, data.length - offset, StandardCharsets.UTF_8);
+        FileLog.d(TAG + ": ContactMsg from=" + pubKeyPrefix + " hops=" + pathLen + " snr=" + snr + " text='" + text + "'");
 
-        FileLog.d(TAG + ": ContactMsg from=" + pubKeyPrefix + " hops=" + pathLen + " text=" + text);
-
-        // Notify listeners
-        for (MeshManagerListener l : listeners) {
-            l.onMessageReceived(data, snr, pathLen);
-        }
+        final String finalPubKey = pubKeyPrefix;
+        final String finalText   = text;
+        final long   finalTs     = timestamp;
+        final int    finalSnr    = snr;
+        final int    finalHops   = pathLen;
+        handler.post(() -> {
+            for (MeshManagerListener l : listeners) {
+                l.onContactMessage(finalPubKey, finalText, finalTs, finalSnr, finalHops);
+            }
+        });
     }
 
     private void parseChannelMessage(byte[] data) {
-        // PACKET_CHANNEL_MSG_RECV (0x08) or V3 (0x11)
+        // PACKET_CHANNEL_MSG_RECV (0x08) or V3 (0x11) per companion_protocol.md:
+        // Standard (0x08): [type][ch_idx][path_len][txt_type][ts LE4][text...]
+        // V3     (0x11): [type][snr][res][res][ch_idx][path_len][txt_type][ts LE4][text...]
         boolean isV3 = (data[0] == PACKET_CHANNEL_MSG_RECV_V3);
         int offset = 1;
         int snr = 0;
-        if (isV3) { snr = data[offset]; offset += 3; }
+        if (isV3) {
+            int snrRaw = data[offset] & 0xFF;
+            snr = (snrRaw < 128 ? snrRaw : snrRaw - 256);
+            offset += 3; // snr + 2 reserved
+        }
 
-        if (data.length < offset + 7) return;
-        int channelIdx = data[offset] & 0xFF;
-        int pathLen    = data[offset + 1] & 0xFF;
-        int txtType    = data[offset + 2] & 0xFF;
-        long timestamp = byteArrayToInt(data, offset + 3) & 0xFFFFFFFFL;
+        // Need: ch_idx(1) + path_len(1) + txt_type(1) + timestamp(4) = 7
+        if (data.length < offset + 7) {
+            FileLog.e(TAG + ": PACKET_CHANNEL_MSG_RECV too short");
+            return;
+        }
+
+        int  channelIdx = data[offset]     & 0xFF;
+        int  pathLen    = data[offset + 1] & 0xFF;
+        int  txtType    = data[offset + 2] & 0xFF;
+        long timestamp  = byteArrayToInt(data, offset + 3) & 0xFFFFFFFFL;
         offset += 7;
         if (offset >= data.length) return;
+
         String text = new String(data, offset, data.length - offset, StandardCharsets.UTF_8);
+        FileLog.d(TAG + ": ChannelMsg ch=" + channelIdx + " hops=" + pathLen + " snr=" + snr + " text='" + text + "'");
 
-        FileLog.d(TAG + ": ChannelMsg ch=" + channelIdx + " hops=" + pathLen + " text=" + text);
-
-        for (MeshManagerListener l : listeners) {
-            l.onMessageReceived(data, snr, pathLen);
-        }
+        final int    finalCh   = channelIdx;
+        final String finalText = text;
+        final long   finalTs   = timestamp;
+        final int    finalSnr  = snr;
+        final int    finalHops = pathLen;
+        handler.post(() -> {
+            for (MeshManagerListener l : listeners) {
+                l.onChannelMessage(finalCh, "", finalText, finalTs, finalSnr, finalHops);
+            }
+        });
     }
 
     private void parseBattery(byte[] data) {
@@ -851,7 +985,50 @@ public class MeshManager {
         packet[6] = (byte) ((ts >> 24) & 0xFF);
         System.arraycopy(textBytes, 0, packet, 7, textBytes.length);
         enqueueWrite(packet);
-        MeshStorage.getInstance().saveMessage((long) channelIndex, 0, text, true);
+        // Save our outgoing message to history
+        MeshStorage.getInstance().saveChannelMessage(channelIndex, null, text, true);
+    }
+
+    /**
+     * Creates or updates a LoRa channel slot on the device.
+     * CMD_SET_CHANNEL (0x20) per companion_protocol.md:
+     *   Byte 0: 0x20
+     *   Byte 1: channel index (0-7)
+     *   Bytes 2-33: channel name (32 bytes, UTF-8, null-padded)
+     *   Bytes 34-49: secret (16 bytes, all-zero for public)
+     * Total: 50 bytes
+     *
+     * @param channelIndex 0 = public, 1-7 = private
+     * @param name         channel name (max 32 bytes UTF-8)
+     * @param secret16     16-byte secret, or null to use all-zero (public channel)
+     */
+    public void sendSetChannel(int channelIndex, String name, byte[] secret16) {
+        if (!isHandshakeComplete) {
+            FileLog.e(TAG + ": Cannot set channel — handshake not complete");
+            return;
+        }
+        if (channelIndex < 0 || channelIndex > 7) {
+            FileLog.e(TAG + ": Invalid channel index: " + channelIndex);
+            return;
+        }
+        byte[] packet = new byte[50];
+        packet[0] = 0x20;  // CMD_SET_CHANNEL
+        packet[1] = (byte) (channelIndex & 0xFF);
+
+        // Channel name: 32 bytes, null-padded
+        byte[] nameBytes = name.getBytes(StandardCharsets.UTF_8);
+        int nameLen = Math.min(nameBytes.length, 32);
+        System.arraycopy(nameBytes, 0, packet, 2, nameLen);
+        // bytes 2+nameLen .. 33 remain 0x00 (null-padding)
+
+        // Secret: 16 bytes
+        if (secret16 != null && secret16.length >= 16) {
+            System.arraycopy(secret16, 0, packet, 34, 16);
+        }
+        // else all-zero = public channel
+
+        FileLog.d(TAG + ": Sending CMD_SET_CHANNEL slot=" + channelIndex + " name='" + name + "'");
+        enqueueWrite(packet);
     }
 
     /** Legacy sendData compat shim — routes to channel 0 */

@@ -4,22 +4,54 @@ import android.content.ContentValues;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.DispatchQueue;
+import org.telegram.messenger.NotificationCenter;
+
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * MeshStorage — SQLite persistence for MeshCore companion protocol data.
+ *
+ * DB schema v3:
+ *  - nodes: per-node metadata + TG user link
+ *  - messages: chat history (channel + DM)
+ *  - lora_channels: LoRa channel slots (0-7) per MeshCore spec
+ *  - device_pins: BLE bonding PINs per device address
+ *
+ * Public key for the MeshCore default public channel (slot 0):
+ *   8b3387e9c5cdea6ac9e5edbaa115cd72
+ *
+ * All SQL writes go through {@link #storageQueue} to prevent blocking the
+ * GATT callback or main thread.
+ */
 public class MeshStorage extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "mesh_data.db";
-    private static final int DATABASE_VERSION = 2;
+    private static final int DATABASE_VERSION = 3;
 
-    // FIX #1: volatile for double-checked locking thread safety
+    // MeshCore official public channel key (slot 0)
+    public static final String PUBLIC_CHANNEL_KEY_HEX = "8b3387e9c5cdea6ac9e5edbaa115cd72";
+
+    // Synthetic dialog ID base for LoRa channels in the Mesh folder.
+    // Channel slot N → dialog_id = -(CHANNEL_DIALOG_BASE + N)
+    // Designed to never collide with real Telegram IDs (which are positive longs < 2^40).
+    private static final long CHANNEL_DIALOG_BASE = 2_000_000_000L;
+
+    // Synthetic dialog ID base for direct Mesh contacts (unlinked to TG)
+    private static final long CONTACT_DIALOG_BASE = 3_000_000_000L;
+
+    // FIX: volatile for double-checked locking
     private static volatile MeshStorage Instance;
 
-    // FIX #2: In-memory cache avoids SQLite reads on the message-routing thread
+    // In-memory node→tgUser cache — avoids SQLite reads on GATT callbacks
     private final ConcurrentHashMap<String, Long> nodeUserCache = new ConcurrentHashMap<>();
+
+    // In-memory channel slot cache — slot_index → LoraChannel
+    private final ConcurrentHashMap<Integer, LoraChannel> channelCache = new ConcurrentHashMap<>();
 
     private final DispatchQueue storageQueue = new DispatchQueue("MeshStorageQueue");
 
@@ -42,9 +74,12 @@ public class MeshStorage extends SQLiteOpenHelper {
 
     private MeshStorage() {
         super(ApplicationLoader.applicationContext, DATABASE_NAME, null, DATABASE_VERSION);
-        // Preload the node→tgUser mapping into memory on the storage thread
-        preloadNodeCache();
+        preloadCaches();
     }
+
+    // ============================================================================================
+    // Schema
+    // ============================================================================================
 
     @Override
     public void onCreate(SQLiteDatabase db) {
@@ -60,62 +95,111 @@ public class MeshStorage extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE messages (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "dialog_id INTEGER, " +
-                "sender_hash INTEGER, " +
+                "sender_pubkey TEXT, " +    // pubkey prefix or empty for our own
                 "text TEXT, " +
                 "date INTEGER, " +
-                "is_out INTEGER, " +
-                "hops INTEGER" +
+                "is_out INTEGER DEFAULT 0" +
                 ")");
 
-        db.execSQL("CREATE TABLE channels (" +
-                "hash INTEGER PRIMARY KEY, " +
-                "name TEXT" +
+        db.execSQL("CREATE TABLE lora_channels (" +
+                "slot_index INTEGER PRIMARY KEY, " +    // 0-7 per MeshCore spec
+                "name TEXT NOT NULL DEFAULT '', " +
+                "secret_hex TEXT, " +                  // 16-byte hex; NULL = public (slot 0)
+                "is_public INTEGER DEFAULT 0" +        // 1 for slot 0 / hashtag channels
                 ")");
 
         db.execSQL("CREATE TABLE device_pins (" +
                 "address TEXT PRIMARY KEY, " +
                 "pin INTEGER" +
                 ")");
+
+        // Seed slot 0 as the public channel (MeshCore public key)
+        ContentValues pub = new ContentValues();
+        pub.put("slot_index", 0);
+        pub.put("name", "Primary");
+        pub.put("secret_hex", PUBLIC_CHANNEL_KEY_HEX);
+        pub.put("is_public", 1);
+        db.insert("lora_channels", null, pub);
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
         if (oldVersion < 2) {
             db.execSQL("CREATE TABLE IF NOT EXISTS device_pins (" +
-                    "address TEXT PRIMARY KEY, " +
-                    "pin INTEGER" +
-                    ")");
+                    "address TEXT PRIMARY KEY, pin INTEGER)");
+        }
+        if (oldVersion < 3) {
+            // Replace old channels table with lora_channels
+            db.execSQL("DROP TABLE IF EXISTS channels");
+
+            db.execSQL("CREATE TABLE IF NOT EXISTS lora_channels (" +
+                    "slot_index INTEGER PRIMARY KEY, " +
+                    "name TEXT NOT NULL DEFAULT '', " +
+                    "secret_hex TEXT, " +
+                    "is_public INTEGER DEFAULT 0)");
+
+            // Add sender_pubkey column to messages if missing
+            try {
+                db.execSQL("ALTER TABLE messages ADD COLUMN sender_pubkey TEXT");
+            } catch (Exception ignored) {}
+
+            // Remove hops column from messages (no longer needed per-message)
+            // SQLite doesn't support DROP COLUMN before 3.35, so leave it
+
+            // Seed public channel
+            ContentValues pub = new ContentValues();
+            pub.put("slot_index", 0);
+            pub.put("name", "Primary");
+            pub.put("secret_hex", PUBLIC_CHANNEL_KEY_HEX);
+            pub.put("is_public", 1);
+            db.insertWithOnConflict("lora_channels", null, pub, SQLiteDatabase.CONFLICT_IGNORE);
         }
     }
 
+    // ============================================================================================
+    // Cache preload
+    // ============================================================================================
+
     /**
-     * Preloads all node→tgUserId mappings into the in-memory cache.
-     * Called once at construction time on the storage background thread.
+     * Preloads node→tgUser and channel slot caches on the storage thread.
+     * Called once at construction.
      */
-    private void preloadNodeCache() {
+    private void preloadCaches() {
         storageQueue.postRunnable(() -> {
             try {
                 SQLiteDatabase db = getReadableDatabase();
-                Cursor cursor = db.query("nodes",
-                        new String[]{"pubkey", "tg_user_id"},
-                        "tg_user_id != 0", null, null, null, null);
-                while (cursor.moveToNext()) {
-                    String pubkey = cursor.getString(0);
-                    long tgId = cursor.getLong(1);
-                    if (tgId != 0) nodeUserCache.put(pubkey, tgId);
+
+                // Node cache
+                try (Cursor c = db.query("nodes", new String[]{"pubkey", "tg_user_id"},
+                        "tg_user_id != 0", null, null, null, null)) {
+                    while (c.moveToNext()) {
+                        String pk = c.getString(0);
+                        long id = c.getLong(1);
+                        if (id != 0) nodeUserCache.put(pk, id);
+                    }
                 }
-                cursor.close();
-                FileLog.d("MeshStorage: node cache preloaded, " + nodeUserCache.size() + " entries");
+
+                // Channel cache
+                try (Cursor c = db.query("lora_channels", null, null, null, null, null, null)) {
+                    while (c.moveToNext()) {
+                        LoraChannel ch = cursorToLoraChannel(c);
+                        channelCache.put(ch.slotIndex, ch);
+                    }
+                }
+
+                FileLog.d("MeshStorage: caches preloaded — " + nodeUserCache.size()
+                        + " nodes, " + channelCache.size() + " channels");
             } catch (Exception e) {
                 FileLog.e(e);
             }
         });
     }
 
-    /**
-     * Fast non-blocking lookup — uses in-memory cache, never touches SQLite.
-     * Safe to call from any thread including GATT callbacks.
-     */
+    // ============================================================================================
+    // Node operations
+    // ============================================================================================
+
+    /** O(1) cache lookup — never touches SQLite. Safe on any thread. */
     public long getTgUserIdCached(String pubkey) {
         Long cached = nodeUserCache.get(pubkey);
         return cached != null ? cached : 0L;
@@ -125,17 +209,16 @@ public class MeshStorage extends SQLiteOpenHelper {
         storageQueue.postRunnable(() -> {
             try {
                 SQLiteDatabase db = getWritableDatabase();
-                ContentValues values = new ContentValues();
-                values.put("pubkey", pubkey);
-                if (nickname != null) values.put("nickname", nickname);
-                values.put("last_seen", System.currentTimeMillis());
-                values.put("last_rssi", rssi);
-                values.put("last_hops", hops);
-                db.insertWithOnConflict("nodes", null, values, SQLiteDatabase.CONFLICT_REPLACE);
-                org.telegram.messenger.AndroidUtilities.runOnUIThread(() ->
-                    org.telegram.messenger.NotificationCenter.getGlobalInstance()
-                        .postNotificationName(org.telegram.messenger.NotificationCenter.didUpdateMeshNodes)
-                );
+                ContentValues v = new ContentValues();
+                v.put("pubkey", pubkey);
+                if (nickname != null) v.put("nickname", nickname);
+                v.put("last_seen", System.currentTimeMillis());
+                v.put("last_rssi", rssi);
+                v.put("last_hops", hops);
+                db.insertWithOnConflict("nodes", null, v, SQLiteDatabase.CONFLICT_REPLACE);
+                AndroidUtilities.runOnUIThread(() ->
+                        NotificationCenter.getGlobalInstance()
+                                .postNotificationName(NotificationCenter.didUpdateMeshNodes));
             } catch (Exception e) {
                 FileLog.e(e);
             }
@@ -143,7 +226,6 @@ public class MeshStorage extends SQLiteOpenHelper {
     }
 
     public void linkNodeToUser(String pubkey, long tgUserId) {
-        // Update in-memory cache immediately, then persist async
         if (tgUserId != 0) {
             nodeUserCache.put(pubkey, tgUserId);
         } else {
@@ -152,51 +234,31 @@ public class MeshStorage extends SQLiteOpenHelper {
         storageQueue.postRunnable(() -> {
             try {
                 SQLiteDatabase db = getWritableDatabase();
-                ContentValues values = new ContentValues();
-                values.put("tg_user_id", tgUserId);
-                db.update("nodes", values, "pubkey = ?", new String[]{pubkey});
-                org.telegram.messenger.AndroidUtilities.runOnUIThread(() ->
-                    org.telegram.messenger.NotificationCenter.getGlobalInstance()
-                        .postNotificationName(org.telegram.messenger.NotificationCenter.didUpdateMeshNodes)
-                );
+                ContentValues v = new ContentValues();
+                v.put("tg_user_id", tgUserId);
+                db.update("nodes", v, "pubkey = ?", new String[]{pubkey});
+                AndroidUtilities.runOnUIThread(() ->
+                        NotificationCenter.getGlobalInstance()
+                                .postNotificationName(NotificationCenter.didUpdateMeshNodes));
             } catch (Exception e) {
                 FileLog.e(e);
             }
         });
     }
 
-    /** @deprecated Use getTgUserIdCached() for non-blocking access. */
-    public long getTgUserIdForNode(String pubkey) {
-        // Return from cache first to avoid blocking; fallback to DB only if cache missed (e.g. cold start race)
-        long cached = getTgUserIdCached(pubkey);
-        if (cached != 0) return cached;
-        SQLiteDatabase db = getReadableDatabase();
-        long userId = 0;
-        try (Cursor cursor = db.query("nodes", new String[]{"tg_user_id"},
-                "pubkey = ?", new String[]{pubkey}, null, null, null)) {
-            if (cursor.moveToFirst()) {
-                userId = cursor.getLong(0);
-                if (userId != 0) nodeUserCache.put(pubkey, userId); // warm cache
-            }
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
-        return userId;
-    }
-
     public ArrayList<MeshNode> getAllNodes() {
         ArrayList<MeshNode> nodes = new ArrayList<>();
-        SQLiteDatabase db = getReadableDatabase();
-        try (Cursor cursor = db.query("nodes", null, null, null, null, null, "last_seen DESC")) {
-            while (cursor.moveToNext()) {
-                MeshNode node = new MeshNode();
-                node.pubkey = cursor.getString(0);
-                node.nickname = cursor.getString(1);
-                node.tgUserId = cursor.getLong(2);
-                node.lastSeen = cursor.getLong(3);
-                node.rssi = cursor.getInt(4);
-                node.hops = cursor.getInt(5);
-                nodes.add(node);
+        try (Cursor c = getReadableDatabase().query(
+                "nodes", null, null, null, null, null, "last_seen DESC")) {
+            while (c.moveToNext()) {
+                MeshNode n = new MeshNode();
+                n.pubkey   = c.getString(0);
+                n.nickname = c.getString(1);
+                n.tgUserId = c.getLong(2);
+                n.lastSeen = c.getLong(3);
+                n.rssi     = c.getInt(4);
+                n.hops     = c.getInt(5);
+                nodes.add(n);
             }
         } catch (Exception e) {
             FileLog.e(e);
@@ -204,22 +266,143 @@ public class MeshStorage extends SQLiteOpenHelper {
         return nodes;
     }
 
-    public void saveMessage(long dialogId, int senderHash, String text, boolean isOut) {
+    // ============================================================================================
+    // LoRa channel operations (slots 0-7 per MeshCore spec)
+    // ============================================================================================
+
+    /**
+     * Saves / updates a LoRa channel slot received from the device via PACKET_CHANNEL_INFO.
+     * Called from MeshManager on GATT thread — writes via storageQueue.
+     *
+     * @param slotIndex  0-7
+     * @param name       channel name (empty string = slot unused)
+     * @param secretHex  16-byte hex secret; use {@link #PUBLIC_CHANNEL_KEY_HEX} for slot 0
+     * @param isPublic   true for slot 0 (public) or hashtag channel
+     */
+    public void saveLoraChannel(int slotIndex, String name, String secretHex, boolean isPublic) {
+        // Update cache immediately
+        LoraChannel ch = new LoraChannel();
+        ch.slotIndex = slotIndex;
+        ch.name      = name;
+        ch.secretHex = secretHex;
+        ch.isPublic  = isPublic;
+        channelCache.put(slotIndex, ch);
+
         storageQueue.postRunnable(() -> {
             try {
                 SQLiteDatabase db = getWritableDatabase();
-                ContentValues values = new ContentValues();
-                values.put("dialog_id", dialogId);
-                values.put("sender_hash", senderHash);
-                values.put("text", text);
-                values.put("date", (int) (System.currentTimeMillis() / 1000));
-                values.put("is_out", isOut ? 1 : 0);
-                db.insert("messages", null, values);
+                ContentValues v = new ContentValues();
+                v.put("slot_index", slotIndex);
+                v.put("name",       name);
+                v.put("secret_hex", secretHex);
+                v.put("is_public",  isPublic ? 1 : 0);
+                db.insertWithOnConflict("lora_channels", null, v, SQLiteDatabase.CONFLICT_REPLACE);
+                FileLog.d("MeshStorage: saved channel slot[" + slotIndex + "] name='" + name + "'");
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        });
 
-                ContentValues channelValues = new ContentValues();
-                channelValues.put("hash", senderHash);
-                channelValues.put("name", "Mesh User " + senderHash);
-                db.insertWithOnConflict("channels", null, channelValues, SQLiteDatabase.CONFLICT_IGNORE);
+        // Notify UI that channels list changed
+        AndroidUtilities.runOnUIThread(() ->
+                NotificationCenter.getGlobalInstance()
+                        .postNotificationName(NotificationCenter.didMeshChannelsUpdated));
+    }
+
+    /** Returns all LoRa channel slots (cache-first). */
+    public ArrayList<LoraChannel> getLoraChannels() {
+        ArrayList<LoraChannel> list = new ArrayList<>(channelCache.values());
+        if (list.isEmpty()) {
+            // Fallback: read from DB (should not happen after preload)
+            try (Cursor c = getReadableDatabase().query(
+                    "lora_channels", null, null, null, null, null, "slot_index ASC")) {
+                while (c.moveToNext()) list.add(cursorToLoraChannel(c));
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        }
+        list.sort((a, b) -> Integer.compare(a.slotIndex, b.slotIndex));
+        return list;
+    }
+
+    /** Returns the LoraChannel for a given slot index (cache-first), or null. */
+    public LoraChannel getLoraChannel(int slotIndex) {
+        return channelCache.get(slotIndex);
+    }
+
+    /**
+     * Returns the synthetic Telegram-style dialog_id for a LoRa channel slot.
+     * These are large negative longs that never collide with real Telegram peer IDs.
+     */
+    public static long channelDialogId(int slotIndex) {
+        return -(CHANNEL_DIALOG_BASE + slotIndex);
+    }
+
+    /**
+     * Returns the synthetic dialog_id for a direct Mesh contact (pubkey prefix → stable id).
+     */
+    public static long contactDialogId(String pubKeyHex) {
+        long hash = Math.abs((long) pubKeyHex.hashCode()) % 1_000_000_000L;
+        return -(CONTACT_DIALOG_BASE + hash);
+    }
+
+    private LoraChannel cursorToLoraChannel(Cursor c) {
+        LoraChannel ch = new LoraChannel();
+        ch.slotIndex = c.getInt(0);
+        ch.name      = c.getString(1);
+        ch.secretHex = c.getString(2);
+        ch.isPublic  = c.getInt(3) == 1;
+        return ch;
+    }
+
+    // ============================================================================================
+    // Message operations
+    // ============================================================================================
+
+    /**
+     * Saves an incoming or outgoing channel message.
+     *
+     * @param slotIndex  LoRa channel slot (0-7)
+     * @param senderPubkey hex pubkey prefix of sender (empty for our own outgoing)
+     * @param text       message text
+     * @param isOut      true = sent by us
+     */
+    public void saveChannelMessage(int slotIndex, String senderPubkey, String text, boolean isOut) {
+        long dialogId = channelDialogId(slotIndex);
+        persistMessage(dialogId, senderPubkey != null ? senderPubkey : "", text, isOut);
+    }
+
+    /**
+     * Saves an incoming or outgoing direct contact message.
+     *
+     * @param pubKeyHex  hex pubkey prefix of the contact
+     * @param text       message text
+     * @param isOut      true = sent by us
+     */
+    public void saveContactMessage(String pubKeyHex, String text, boolean isOut) {
+        long dialogId = contactDialogId(pubKeyHex);
+        persistMessage(dialogId, isOut ? "" : pubKeyHex, text, isOut);
+    }
+
+    /**
+     * @deprecated Use {@link #saveChannelMessage} or {@link #saveContactMessage} instead.
+     */
+    @Deprecated
+    public void saveMessage(long dialogId, int senderHash, String text, boolean isOut) {
+        persistMessage(dialogId, String.valueOf(senderHash), text, isOut);
+    }
+
+    private void persistMessage(long dialogId, String senderPubkey, String text, boolean isOut) {
+        storageQueue.postRunnable(() -> {
+            try {
+                SQLiteDatabase db = getWritableDatabase();
+                ContentValues v = new ContentValues();
+                v.put("dialog_id",     dialogId);
+                v.put("sender_pubkey", senderPubkey);
+                v.put("text",          text);
+                v.put("date",          (int) (System.currentTimeMillis() / 1000));
+                v.put("is_out",        isOut ? 1 : 0);
+                db.insert("messages", null, v);
             } catch (Exception e) {
                 FileLog.e(e);
             }
@@ -227,61 +410,38 @@ public class MeshStorage extends SQLiteOpenHelper {
     }
 
     public ArrayList<MeshMessage> getMessages(long dialogId, int limit) {
-        ArrayList<MeshMessage> messages = new ArrayList<>();
-        SQLiteDatabase db = getReadableDatabase();
-        try (Cursor cursor = db.query("messages", null,
+        ArrayList<MeshMessage> msgs = new ArrayList<>();
+        try (Cursor c = getReadableDatabase().query("messages", null,
                 "dialog_id = ?", new String[]{String.valueOf(dialogId)},
                 null, null, "date DESC", String.valueOf(limit))) {
-            while (cursor.moveToNext()) {
-                MeshMessage msg = new MeshMessage();
-                msg.id = cursor.getInt(0);
-                msg.dialogId = cursor.getLong(1);
-                msg.senderHash = cursor.getInt(2);
-                msg.text = cursor.getString(3);
-                msg.date = cursor.getInt(4);
-                msg.isOut = cursor.getInt(5) == 1;
-                msg.hops = cursor.getInt(6);
-                messages.add(msg);
+            while (c.moveToNext()) {
+                MeshMessage m = new MeshMessage();
+                m.id           = c.getInt(0);
+                m.dialogId     = c.getLong(1);
+                m.senderPubkey = c.getString(2);
+                m.text         = c.getString(3);
+                m.date         = c.getInt(4);
+                m.isOut        = c.getInt(5) == 1;
+                msgs.add(m);
             }
         } catch (Exception e) {
             FileLog.e(e);
         }
-        return messages;
+        return msgs;
     }
 
-    public ArrayList<MeshChannel> getChannels() {
-        ArrayList<MeshChannel> channels = new ArrayList<>();
-        SQLiteDatabase db = getReadableDatabase();
-        try (Cursor cursor = db.query("channels", null, null, null, null, null, null)) {
-            while (cursor.moveToNext()) {
-                MeshChannel channel = new MeshChannel();
-                channel.hash = cursor.getInt(0);
-                channel.name = cursor.getString(1);
-                channels.add(channel);
-            }
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
-        if (channels.isEmpty()) {
-            MeshChannel broadcast = new MeshChannel();
-            broadcast.hash = 0;
-            broadcast.name = "Mesh Broadcast";
-            channels.add(broadcast);
-        }
-        return channels;
-    }
+    // ============================================================================================
+    // Device PIN operations
+    // ============================================================================================
 
-    /**
-     * Persists the BLE PIN reported by the device in PACKET_DEVICE_INFO.
-     * Used to auto-confirm bonding when the device PIN differs from default 123456.
-     */
+    /** Persists the BLE PIN reported by device via PACKET_DEVICE_INFO. */
     public void saveDevicePin(String address, int pin) {
         storageQueue.postRunnable(() -> {
             try {
                 SQLiteDatabase db = getWritableDatabase();
                 ContentValues v = new ContentValues();
                 v.put("address", address);
-                v.put("pin", pin);
+                v.put("pin",     pin);
                 db.insertWithOnConflict("device_pins", null, v, SQLiteDatabase.CONFLICT_REPLACE);
                 FileLog.d("MeshStorage: saved BLE PIN for " + address);
             } catch (Exception e) {
@@ -290,10 +450,9 @@ public class MeshStorage extends SQLiteOpenHelper {
         });
     }
 
-    /** Returns the stored BLE PIN for a device, or 0 if not stored. */
+    /** Returns stored BLE PIN for a device, or 0 if none. */
     public int getDevicePin(String address) {
-        SQLiteDatabase db = getReadableDatabase();
-        try (android.database.Cursor c = db.query("device_pins", new String[]{"pin"},
+        try (Cursor c = getReadableDatabase().query("device_pins", new String[]{"pin"},
                 "address = ?", new String[]{address}, null, null, null)) {
             if (c.moveToFirst()) return c.getInt(0);
         } catch (Exception e) {
@@ -302,40 +461,75 @@ public class MeshStorage extends SQLiteOpenHelper {
         return 0;
     }
 
-    public String getLastMessage(int senderHash) {
-        SQLiteDatabase db = getReadableDatabase();
-        String text = "";
-        try (Cursor cursor = db.query("messages", new String[]{"text"},
-                "sender_hash = ?", new String[]{String.valueOf(senderHash)},
-                null, null, "date DESC", "1")) {
-            if (cursor.moveToFirst()) text = cursor.getString(0);
-        } catch (Exception e) {
-            FileLog.e(e);
+    // ============================================================================================
+    // Legacy compat (used by MeshSettingsActivity)
+    // ============================================================================================
+
+    @Deprecated
+    public ArrayList<MeshChannel> getChannels() {
+        ArrayList<MeshChannel> result = new ArrayList<>();
+        for (LoraChannel lc : getLoraChannels()) {
+            if (!lc.name.isEmpty()) {
+                MeshChannel mc = new MeshChannel();
+                mc.slotIndex = lc.slotIndex;
+                mc.name      = lc.name;
+                result.add(mc);
+            }
         }
-        return text;
+        if (result.isEmpty()) {
+            MeshChannel bc = new MeshChannel();
+            bc.slotIndex = 0;
+            bc.name      = "Primary";
+            result.add(bc);
+        }
+        return result;
     }
+
+    // ============================================================================================
+    // Data classes
+    // ============================================================================================
 
     public static class MeshNode {
         public String pubkey;
         public String nickname;
-        public long tgUserId;
-        public long lastSeen;
-        public int rssi;
-        public int hops;
+        public long   tgUserId;
+        public long   lastSeen;
+        public int    rssi;
+        public int    hops;
     }
 
+    /**
+     * Represents a MeshCore channel slot (0-7).
+     *
+     * Slot 0: public channel (public key = 8b3387e9c5cdea6ac9e5edbaa115cd72)
+     * Slots 1-7: private / hashtag channels
+     */
+    public static class LoraChannel {
+        public int     slotIndex;
+        public String  name;
+        public String  secretHex;   // 16-byte hex, null only during partial parse
+        public boolean isPublic;
+
+        /** Returns the synthetic Telegram-style dialog_id for this channel. */
+        public long dialogId() { return channelDialogId(slotIndex); }
+    }
+
+    /**
+     * Legacy channel model kept for API compatibility.
+     * @deprecated Use {@link LoraChannel} instead.
+     */
+    @Deprecated
     public static class MeshChannel {
-        public int hash;
+        public int    slotIndex;
         public String name;
     }
 
     public static class MeshMessage {
-        public int id;
-        public long dialogId;
-        public int senderHash;
-        public String text;
-        public int date;
+        public int     id;
+        public long    dialogId;
+        public String  senderPubkey;
+        public String  text;
+        public int     date;
         public boolean isOut;
-        public int hops;
     }
 }

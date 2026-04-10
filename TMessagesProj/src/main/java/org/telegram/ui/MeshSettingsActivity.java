@@ -328,9 +328,6 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
         }
     }
 
-    @Override
-    public void onMessageReceived(byte[] data, int rssi, int hops) {
-    }
 
     @Override
     public void onRequestPermissionsResultFragment(int requestCode, String[] permissions, int[] grantResults) {

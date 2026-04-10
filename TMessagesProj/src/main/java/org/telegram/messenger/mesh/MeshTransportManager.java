@@ -5,34 +5,49 @@ import android.content.SharedPreferences;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
-import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.UserConfig;
-import org.telegram.tgnet.TLRPC;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * MeshTransportManager maintains the global state of the Mesh transport
- * and is responsible for routing incoming packets to the correct destination.
+ * MeshTransportManager — global coordinator of the MeshCore transport layer.
+ *
+ * Responsibilities:
+ *  - Maintains user-facing Mesh state (enabled/disabled, selected device, radio config)
+ *  - Receives typed callbacks from MeshManager and routes them to the correct destination:
+ *      * Channel messages  → LoRa channel synthetic dialog (slot 0-7)
+ *      * Contact messages  → Contact synthetic dialog (pubkey-derived)
+ *      * Linked TG user    → Real Telegram chat via MessagesController (future)
+ *  - Persists messages via MeshStorage (async, never blocks GATT thread)
+ *  - Posts NotificationCenter events for UI refresh
+ *
+ * Threading:
+ *  MeshManager delivers all typed callbacks on the main looper (handler.post).
+ *  All storage writes go through MeshStorage.storageQueue.
+ *  NotificationCenter.postNotificationName must be called on the main thread — guaranteed here.
  */
 public class MeshTransportManager implements MeshManager.MeshManagerListener {
 
     private static volatile MeshTransportManager Instance;
 
-    // FIX #5: Static Gson + Type instances avoid repeated expensive allocation on every scroll/render
+    // Gson + Type instances — static to avoid repeated allocation
     private static final Gson GSON = new Gson();
     private static final Type PRESET_LIST_TYPE = new TypeToken<ArrayList<MeshPreset>>() {}.getType();
 
     private boolean meshEnabled;
     private String selectedDeviceAddress;
 
-    // FIX #5: In-memory cache for user presets; invalidated on save/delete
+    // In-memory cache for user presets; invalidated on save/delete
     private List<MeshPreset> userPresetsCache = null;
+
+    // Self-info from the connected device (set on PACKET_SELF_INFO)
+    private String selfPubKeyHex;
+    private String selfDeviceName;
 
     public static MeshTransportManager getInstance() {
         MeshTransportManager localInstance = Instance;
@@ -109,12 +124,12 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
 
     private MeshTransportManager() {
         SharedPreferences prefs = prefs();
-        meshEnabled        = prefs.getBoolean("mesh_enabled", false);
+        meshEnabled           = prefs.getBoolean("mesh_enabled", false);
         selectedDeviceAddress = prefs.getString("mesh_device_address", null);
-        frequency          = prefs.getLong("radio_freq", 868731018L);
-        bandwidth          = prefs.getFloat("radio_bw", 62.5f);
-        spreadingFactor    = prefs.getInt("radio_sf", 7);
-        codingRate         = prefs.getInt("radio_cr", 7);
+        frequency             = prefs.getLong("radio_freq", 868731018L);
+        bandwidth             = prefs.getFloat("radio_bw", 62.5f);
+        spreadingFactor       = prefs.getInt("radio_sf", 7);
+        codingRate            = prefs.getInt("radio_cr", 7);
 
         MeshManager.getInstance().addListener(this);
     }
@@ -175,11 +190,18 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
         prefs().edit().putString("mesh_device_address", address).apply();
     }
 
-    // ---- Presets (FIX #5: cached, no Gson allocation on each call) ---------------
+    // ---- Self info ---------------------------------------------------------------
+
+    /** Returns the public key hex of the connected device (set after handshake). */
+    public String getSelfPubKeyHex()  { return selfPubKeyHex; }
+
+    /** Returns the device display name (set after handshake). */
+    public String getSelfDeviceName() { return selfDeviceName; }
+
+    // ---- Presets -----------------------------------------------------------------
 
     public List<MeshPreset> getPresets() {
         List<MeshPreset> all = new ArrayList<>(SYSTEM_PRESETS);
-        // FIX #5: Use cached list; only parse JSON once
         if (userPresetsCache == null) {
             userPresetsCache = loadUserPresetsFromDisk();
         }
@@ -235,106 +257,115 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
         return "Custom";
     }
 
-    // ---- MeshManagerListener callbacks ------------------------------------------
+    // ---- MeshManagerListener callbacks -------------------------------------------
+    // All callbacks arrive on the main thread (MeshManager posts via handler).
 
     @Override
     public void onDevicesUpdated() {}
 
     @Override
-    public void onConnectionStateChanged(boolean connected) {}
+    public void onConnectionStateChanged(boolean connected) {
+        if (!connected) {
+            FileLog.d("MeshTransportManager: device disconnected");
+        }
+    }
 
     /**
-     * FIX #6: Non-blocking — uses in-memory cache for node lookup instead of SQLite.
-     * The updateNode call is async (posts to storageQueue internally).
+     * Device self-info received after CMD_APP_START handshake.
+     * Updates radio config to match what the device actually reports.
      */
     @Override
-    public void onMessageReceived(byte[] data, int rssi, int hops) {
-        MeshProtocol.Packet packet = MeshProtocol.Packet.deserialize(data);
-        if (packet == null) return;
+    public void onSelfInfoLoaded(String pubKeyHex, String name,
+                                  long freqHz, float bwKHz, int sf, int cr) {
+        selfPubKeyHex  = pubKeyHex;
+        selfDeviceName = name;
 
-        String senderId = (packet.path != null && packet.path.length > 0)
-                ? String.valueOf(packet.path[0]) : "unknown";
-
-        // Async — posts to storageQueue, never blocks
-        MeshStorage.getInstance().updateNode(senderId, null, rssi, hops);
-
-        // FIX #6: Cache lookup — O(1), no SQLite, safe on any thread
-        long tgUserId = MeshStorage.getInstance().getTgUserIdCached(senderId);
-        if (tgUserId != 0) {
-            routeToTelegramChat(tgUserId, packet, rssi, hops);
-        } else {
-            routeToMeshPureChat(senderId, packet, rssi, hops);
+        // Sync local radio config to match device
+        if (freqHz > 0) {
+            this.frequency       = freqHz;
+            this.bandwidth       = bwKHz;
+            this.spreadingFactor = sf;
+            this.codingRate      = cr;
+            prefs().edit()
+                    .putLong("radio_freq", freqHz)
+                    .putFloat("radio_bw",  bwKHz)
+                    .putInt("radio_sf",    sf)
+                    .putInt("radio_cr",    cr)
+                    .apply();
         }
+
+        FileLog.d("MeshTransportManager: handshake OK device='" + name
+                + "' pubkey=" + (pubKeyHex != null && pubKeyHex.length() > 12
+                        ? pubKeyHex.substring(0, 12) + "..." : pubKeyHex)
+                + " freq=" + freqHz + " sf=" + sf);
     }
 
     /**
-     * Routes a message from a node linked to a Telegram user into that user's chat.
+     * A LoRa channel slot was loaded from device (PACKET_CHANNEL_INFO).
+     * MeshStorage already saved it; here we notify the UI.
      */
-    private void routeToTelegramChat(long userId, MeshProtocol.Packet packet, int rssi, int hops) {
-        if (packet.type != MeshProtocol.TYPE_TXT_MSG) return;
-        if (packet.payload == null || packet.payload.length == 0) return;
-
-        final String text = new String(packet.payload, StandardCharsets.UTF_8);
-
-        TLRPC.TL_message message = new TLRPC.TL_message();
-        message.message = text;
-        message.date    = (int) (System.currentTimeMillis() / 1000);
-        message.from_id = new TLRPC.TL_peerUser();
-        message.from_id.user_id = userId;
-        message.peer_id = new TLRPC.TL_peerUser();
-        message.peer_id.user_id = userId;
-        message.out    = false;
-        message.unread = true;
-
-        // Embed Mesh metadata into custom_params for UI indicator downstream
-        try {
-            message.custom_params = new org.telegram.tgnet.NativeByteBuffer(8);
-            message.custom_params.writeInt32(0x4D455348); // "MESH" magic
-            message.custom_params.writeInt32(hops);
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
-
-        TLRPC.TL_messages_messages container = new TLRPC.TL_messages_messages();
-        container.messages.add(message);
-
-        AndroidUtilities.runOnUIThread(() -> {
-            try {
-                MessagesController.getInstance(UserConfig.selectedAccount).processLoadedMessages(
-                        container, 1, userId, 0, 1, 0, 0, false,
-                        0, 0, 0, 0, 0, 1, false, 0, 0, 0, false, 0, true, false, null);
-            } catch (Exception e) {
-                FileLog.e(e);
-            }
-        });
+    @Override
+    public void onChannelLoaded(int slotIndex, String name, String secretHex, boolean isPublic) {
+        // MeshStorage.saveLoraChannel() was already called by MeshManager's parseChannelInfo.
+        // Just notify the UI so MeshSettingsActivity / folder refresh picks it up.
+        NotificationCenter.getGlobalInstance()
+                .postNotificationName(NotificationCenter.didMeshChannelsUpdated);
     }
 
     /**
-     * FIX #7: Routes a message from an unlinked Mesh node into the virtual Mesh folder.
+     * Incoming LoRa channel message (PACKET_CHANNEL_MSG_RECV / V3).
      *
-     * A stable synthetic dialog ID is derived from the sender's hash so that all messages
-     * from the same node group into the same "conversation" in the Mesh folder.
+     * Routes to the synthetic dialog for that channel slot in the Mesh folder.
      */
-    private void routeToMeshPureChat(String senderId, MeshProtocol.Packet packet, int rssi, int hops) {
-        if (packet.payload == null || packet.payload.length == 0) return;
+    @Override
+    public void onChannelMessage(int channelIndex, String senderInfo, String text,
+                                  long timestampSec, int snr, int hops) {
+        if (text == null || text.isEmpty()) return;
 
-        // Only handle text and group text packets; ignore control packets
-        if (packet.type != MeshProtocol.TYPE_TXT_MSG &&
-            packet.type != MeshProtocol.TYPE_GRP_TXT) return;
+        // Persist to local DB (async)
+        MeshStorage.getInstance().saveChannelMessage(channelIndex, senderInfo, text, false);
 
-        final String text        = new String(packet.payload, StandardCharsets.UTF_8);
-        final int    senderHash  = senderId.hashCode();
+        // Determine the name of the channel for display
+        MeshStorage.LoraChannel ch = MeshStorage.getInstance().getLoraChannel(channelIndex);
+        String channelName = (ch != null && !ch.name.isEmpty()) ? ch.name : "Channel " + channelIndex;
 
-        // Synthetic dialog ID: negative, unique per sender, fits in long without collision with real TG IDs
-        final long meshDialogId  = -(Math.abs((long) senderHash) % 1_000_000_000L + 1_000_000_001L);
+        // Notify UI: Mesh folder should show new message badge
+        NotificationCenter.getGlobalInstance().postNotificationName(
+                NotificationCenter.didReceiveMeshChannelMessage,
+                channelIndex, text, channelName);
 
-        // Persist message asynchronously (storageQueue inside MeshStorage)
-        MeshStorage.getInstance().saveMessage(meshDialogId, senderHash, text, false);
+        // Also trigger general node update for badge counters
+        NotificationCenter.getGlobalInstance()
+                .postNotificationName(NotificationCenter.didUpdateMeshNodes);
+    }
 
-        // Notify the Mesh folder UI on the main thread
-        AndroidUtilities.runOnUIThread(() ->
-            NotificationCenter.getGlobalInstance().postNotificationName(
-                    NotificationCenter.didUpdateMeshNodes)
-        );
+    /**
+     * Incoming LoRa direct contact message (PACKET_CONTACT_MSG_RECV / V3).
+     *
+     * If the sender's pubkey is linked to a Telegram user, a future version will
+     * route this to the real Telegram chat. For now all go to synthetic dialogs.
+     */
+    @Override
+    public void onContactMessage(String pubKeyHex, String text,
+                                  long timestampSec, int snr, int hops) {
+        if (text == null || text.isEmpty()) return;
+
+        // Check if this node is linked to a real TG user
+        long tgUserId = MeshStorage.getInstance().getTgUserIdCached(pubKeyHex);
+        if (tgUserId != 0) {
+            // Route to real TG chat (future: inject synthetic TG message)
+            FileLog.d("MeshTransportManager: contact msg from TG-linked node tgId=" + tgUserId);
+            // TODO: inject into Telegram chat via processLoadedMessages (Phase 2)
+        }
+
+        // Always persist to Mesh contact storage
+        MeshStorage.getInstance().saveContactMessage(pubKeyHex, text, false);
+
+        // Notify UI
+        NotificationCenter.getGlobalInstance().postNotificationName(
+                NotificationCenter.didReceiveMeshContactMessage, pubKeyHex, text);
+
+        NotificationCenter.getGlobalInstance()
+                .postNotificationName(NotificationCenter.didUpdateMeshNodes);
     }
 }
