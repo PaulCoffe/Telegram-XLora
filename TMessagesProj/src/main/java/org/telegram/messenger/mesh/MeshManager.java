@@ -90,6 +90,11 @@ public class MeshManager {
     };
 
     private String currentDeviceAddress;
+
+    // FIX #3: Reconnect with exponential backoff on GATT error
+    private int reconnectAttempts = 0;
+    private static final int MAX_RECONNECT_ATTEMPTS = 3;
+    private static final long[] RECONNECT_DELAYS_MS = {2000L, 5000L, 15000L};
     
     private final MeshFragmenter fragmenter = new MeshFragmenter();
     private BluetoothGatt bluetoothGatt;
@@ -300,10 +305,21 @@ public class MeshManager {
         }
     };
 
+    // FIX #4: Guard getName() with BLUETOOTH_CONNECT permission on Android 12+
     public java.util.ArrayList<String> getFoundDevices() {
         java.util.ArrayList<String> names = new java.util.ArrayList<>();
         for (BluetoothDevice d : foundDevices) {
-            names.add(d.getName() + "\n" + d.getAddress());
+            String name = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (ActivityCompat.checkSelfPermission(ApplicationLoader.applicationContext,
+                        Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                    name = d.getName();
+                }
+            } else {
+                name = d.getName();
+            }
+            if (name == null || name.isEmpty()) name = "Mesh Device";
+            names.add(name + "\n" + d.getAddress());
         }
         return names;
     }
@@ -337,8 +353,39 @@ public class MeshManager {
     private void connectToDevice(BluetoothDevice device) {
         if (device == null) return;
         currentDeviceAddress = device.getAddress();
-        FileLog.d(TAG + ": Connecting to: " + device.getName() + " (" + currentDeviceAddress + ")");
+        // Close any existing stale GATT connection before opening a new one
+        if (bluetoothGatt != null) {
+            bluetoothGatt.close();
+            bluetoothGatt = null;
+        }
+        FileLog.d(TAG + ": Connecting to device (" + currentDeviceAddress + ")");
         bluetoothGatt = device.connectGatt(ApplicationLoader.applicationContext, false, gattCallback);
+    }
+
+    /**
+     * FIX #3: Schedules a reconnect attempt with exponential backoff.
+     * After MAX_RECONNECT_ATTEMPTS failures, falls back to a new BLE scan.
+     */
+    private void scheduleReconnect() {
+        if (currentDeviceAddress == null) return;
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            FileLog.e(TAG + ": Max reconnect attempts (" + MAX_RECONNECT_ATTEMPTS + ") reached. Restarting scan.");
+            reconnectAttempts = 0;
+            handler.post(this::startScanningIfPermissionsGranted);
+            return;
+        }
+        long delay = RECONNECT_DELAYS_MS[reconnectAttempts];
+        reconnectAttempts++;
+        FileLog.d(TAG + ": Scheduling reconnect attempt " + reconnectAttempts + " in " + delay + "ms");
+        handler.postDelayed(() -> {
+            if (!isConnected && currentDeviceAddress != null) {
+                BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+                if (adapter != null && adapter.isEnabled()) {
+                    BluetoothDevice device = adapter.getRemoteDevice(currentDeviceAddress);
+                    connectToDevice(device);
+                }
+            }
+        }, delay);
     }
 
     public void stopAll() {
@@ -356,8 +403,8 @@ public class MeshManager {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 FileLog.d(TAG + ": GATT Connected [status=" + status + "], discovering services...");
                 isConnected = true;
+                reconnectAttempts = 0; // FIX #3: reset counter on successful connect
                 // MintyLinux sequence Step 1: discoverServices first
-                // requestMtu will be called in onServicesDiscovered
                 gatt.discoverServices();
                 handler.post(() -> {
                     for (MeshManagerListener l : listeners) {
@@ -369,14 +416,20 @@ public class MeshManager {
                 isConnected = false;
                 isHandshakeComplete = false;
                 isWriting = false;
-                // Clear stale packets to prevent memory leak and wrong packets on reconnect
                 writeQueue.clear();
                 rxCharacteristic = null;
+                gatt.close(); // Always close after disconnect to free resources
+                if (bluetoothGatt == gatt) bluetoothGatt = null;
                 handler.post(() -> {
                     for (MeshManagerListener l : listeners) {
                         l.onConnectionStateChanged(false);
                     }
                 });
+                // FIX #3: Auto-reconnect on unexpected disconnect (status != 0 means GATT error)
+                if (status != 0) {
+                    FileLog.e(TAG + ": GATT error on disconnect (status=" + status + "), scheduling reconnect...");
+                    scheduleReconnect();
+                }
             }
         }
 
