@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MeshStorage extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "mesh_data.db";
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2;
 
     // FIX #1: volatile for double-checked locking thread safety
     private static volatile MeshStorage Instance;
@@ -71,10 +71,21 @@ public class MeshStorage extends SQLiteOpenHelper {
                 "hash INTEGER PRIMARY KEY, " +
                 "name TEXT" +
                 ")");
+
+        db.execSQL("CREATE TABLE device_pins (" +
+                "address TEXT PRIMARY KEY, " +
+                "pin INTEGER" +
+                ")");
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        if (oldVersion < 2) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS device_pins (" +
+                    "address TEXT PRIMARY KEY, " +
+                    "pin INTEGER" +
+                    ")");
+        }
     }
 
     /**
@@ -258,6 +269,37 @@ public class MeshStorage extends SQLiteOpenHelper {
             channels.add(broadcast);
         }
         return channels;
+    }
+
+    /**
+     * Persists the BLE PIN reported by the device in PACKET_DEVICE_INFO.
+     * Used to auto-confirm bonding when the device PIN differs from default 123456.
+     */
+    public void saveDevicePin(String address, int pin) {
+        storageQueue.postRunnable(() -> {
+            try {
+                SQLiteDatabase db = getWritableDatabase();
+                ContentValues v = new ContentValues();
+                v.put("address", address);
+                v.put("pin", pin);
+                db.insertWithOnConflict("device_pins", null, v, SQLiteDatabase.CONFLICT_REPLACE);
+                FileLog.d("MeshStorage: saved BLE PIN for " + address);
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        });
+    }
+
+    /** Returns the stored BLE PIN for a device, or 0 if not stored. */
+    public int getDevicePin(String address) {
+        SQLiteDatabase db = getReadableDatabase();
+        try (android.database.Cursor c = db.query("device_pins", new String[]{"pin"},
+                "address = ?", new String[]{address}, null, null, null)) {
+            if (c.moveToFirst()) return c.getInt(0);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return 0;
     }
 
     public String getLastMessage(int senderHash) {
