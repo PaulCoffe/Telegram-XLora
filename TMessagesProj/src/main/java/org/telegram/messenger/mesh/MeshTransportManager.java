@@ -5,14 +5,17 @@ import android.content.SharedPreferences;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
-import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.UserConfig;
+import org.telegram.tgnet.TLRPC;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * MeshTransportManager — global coordinator of the MeshCore transport layer.
@@ -38,6 +41,10 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
     // Gson + Type instances — static to avoid repeated allocation
     private static final Gson GSON = new Gson();
     private static final Type PRESET_LIST_TYPE = new TypeToken<ArrayList<MeshPreset>>() {}.getType();
+
+    // Synthetic message IDs for injected Mesh messages start at this negative base
+    // to never collide with real Telegram message IDs (must be unique per session)
+    private static final AtomicInteger meshSyntheticMsgId = new AtomicInteger(-90_000_000);
 
     private boolean meshEnabled;
     private String selectedDeviceAddress;
@@ -342,8 +349,10 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
     /**
      * Incoming LoRa direct contact message (PACKET_CONTACT_MSG_RECV / V3).
      *
-     * If the sender's pubkey is linked to a Telegram user, a future version will
-     * route this to the real Telegram chat. For now all go to synthetic dialogs.
+     * Phase 6.2 — Hybrid Mode:
+     * If the sender pubkey is linked to a Telegram user, we inject a synthetic TL_message
+     * into the real TG chat so that the conversation appears seamlessly in the TG UI.
+     * The message is prefixed with "📡 LoRa" to indicate the transport origin.
      */
     @Override
     public void onContactMessage(String pubKeyHex, String text,
@@ -353,9 +362,8 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
         // Check if this node is linked to a real TG user
         long tgUserId = MeshStorage.getInstance().getTgUserIdCached(pubKeyHex);
         if (tgUserId != 0) {
-            // Route to real TG chat (future: inject synthetic TG message)
-            FileLog.d("MeshTransportManager: contact msg from TG-linked node tgId=" + tgUserId);
-            // TODO: inject into Telegram chat via processLoadedMessages (Phase 2)
+            // Inject into the real Telegram chat for seamless hybrid experience
+            injectMeshMessageToTgChat(tgUserId, pubKeyHex, text, (int) timestampSec);
         }
 
         // Always persist to Mesh contact storage
@@ -368,4 +376,56 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
         NotificationCenter.getGlobalInstance()
                 .postNotificationName(NotificationCenter.didUpdateMeshNodes);
     }
-}
+
+    /**
+     * Injects a synthetic Telegram message into a real user chat to represent an
+     * incoming LoRa contact message from a linked node.
+     *
+     * The message is marked with a "📡 LoRa" prefix so the user can distinguish it
+     * from regular Telegram messages. It is NOT persisted in Telegram's database —
+     * it exists only in memory and is backed by MeshStorage.
+     *
+     * Threading: called from onContactMessage which always runs on the main thread.
+     *
+     * @param tgUserId   the Telegram user ID to inject the message into
+     * @param pubKeyHex  the sender's Mesh pubkey prefix (for logging)
+     * @param text       the message text
+     * @param dateSeconds Unix timestamp in seconds
+     */
+    private void injectMeshMessageToTgChat(long tgUserId, String pubKeyHex, String text, int dateSeconds) {
+        try {
+            int account = UserConfig.selectedAccount;
+            MessagesController mc = MessagesController.getInstance(account);
+
+            // Build a synthetic TLRPC.TL_message
+            TLRPC.TL_message msg = new TLRPC.TL_message();
+            msg.id      = meshSyntheticMsgId.getAndDecrement();  // unique negative ID
+            msg.date    = dateSeconds;
+            msg.message = "📡 LoRa: " + text;
+            msg.flags  |= TLRPC.MESSAGE_FLAG_HAS_FROM_ID;        // has from_id
+
+            // from_id = sender (the linked TG user)
+            TLRPC.TL_peerUser fromPeer = new TLRPC.TL_peerUser();
+            fromPeer.user_id = tgUserId;
+            msg.from_id = fromPeer;
+
+            // peer_id = the DM dialog (user → me)
+            TLRPC.TL_peerUser peerUser = new TLRPC.TL_peerUser();
+            peerUser.user_id = tgUserId;
+            msg.peer_id = peerUser;
+
+            // Build MessageObject (in = not from us)
+            MessageObject msgObj = new MessageObject(account, msg, false, false);
+
+            ArrayList<MessageObject> arrayList = new ArrayList<>(1);
+            arrayList.add(msgObj);
+
+            // Route to MessagesController to show in the TG chat + update dialogs list
+            mc.updateInterfaceWithMessages(tgUserId, arrayList, 0);
+
+            FileLog.d("MeshTransportManager: injected LoRa msg into TG chat userId=" + tgUserId
+                    + " from pubkey=" + pubKeyHex.substring(0, Math.min(12, pubKeyHex.length())));
+        } catch (Exception e) {
+            FileLog.e("MeshTransportManager: failed to inject LoRa message into TG chat", e);
+        }
+    }

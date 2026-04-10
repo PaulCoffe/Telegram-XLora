@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MeshStorage extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "mesh_data.db";
-    private static final int DATABASE_VERSION = 3;
+    private static final int DATABASE_VERSION = 4;
 
     // MeshCore official public channel key (slot 0)
     public static final String PUBLIC_CHANNEL_KEY_HEX = "8b3387e9c5cdea6ac9e5edbaa115cd72";
@@ -98,8 +98,11 @@ public class MeshStorage extends SQLiteOpenHelper {
                 "sender_pubkey TEXT, " +    // pubkey prefix or empty for our own
                 "text TEXT, " +
                 "date INTEGER, " +
-                "is_out INTEGER DEFAULT 0" +
-                ")");
+                "is_out INTEGER DEFAULT 0, " +
+                "mesh_msg_id INTEGER DEFAULT 0" +  // random_id from MeshCore packet (for dedup)
+                ");");
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_dedup " +
+                "ON messages(dialog_id, mesh_msg_id) WHERE mesh_msg_id != 0");
 
         db.execSQL("CREATE TABLE lora_channels (" +
                 "slot_index INTEGER PRIMARY KEY, " +    // 0-7 per MeshCore spec
@@ -143,9 +146,6 @@ public class MeshStorage extends SQLiteOpenHelper {
                 db.execSQL("ALTER TABLE messages ADD COLUMN sender_pubkey TEXT");
             } catch (Exception ignored) {}
 
-            // Remove hops column from messages (no longer needed per-message)
-            // SQLite doesn't support DROP COLUMN before 3.35, so leave it
-
             // Seed public channel
             ContentValues pub = new ContentValues();
             pub.put("slot_index", 0);
@@ -153,6 +153,16 @@ public class MeshStorage extends SQLiteOpenHelper {
             pub.put("secret_hex", PUBLIC_CHANNEL_KEY_HEX);
             pub.put("is_public", 1);
             db.insertWithOnConflict("lora_channels", null, pub, SQLiteDatabase.CONFLICT_IGNORE);
+        }
+        if (oldVersion < 4) {
+            // Add deduplication: mesh_msg_id column + unique index
+            try {
+                db.execSQL("ALTER TABLE messages ADD COLUMN mesh_msg_id INTEGER DEFAULT 0");
+            } catch (Exception ignored) {} // column may already exist if upgrading from freshly created v3
+            try {
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_dedup " +
+                        "ON messages(dialog_id, mesh_msg_id) WHERE mesh_msg_id != 0");
+            } catch (Exception ignored) {}
         }
     }
 
@@ -368,8 +378,13 @@ public class MeshStorage extends SQLiteOpenHelper {
      * @param isOut      true = sent by us
      */
     public void saveChannelMessage(int slotIndex, String senderPubkey, String text, boolean isOut) {
+        saveChannelMessage(slotIndex, senderPubkey, text, isOut, 0);
+    }
+
+    /** Saves a channel message with optional MeshCore packet ID for deduplication. */
+    public void saveChannelMessage(int slotIndex, String senderPubkey, String text, boolean isOut, long meshMsgId) {
         long dialogId = channelDialogId(slotIndex);
-        persistMessage(dialogId, senderPubkey != null ? senderPubkey : "", text, isOut);
+        persistMessage(dialogId, senderPubkey != null ? senderPubkey : "", text, isOut, meshMsgId);
     }
 
     /**
@@ -380,8 +395,13 @@ public class MeshStorage extends SQLiteOpenHelper {
      * @param isOut      true = sent by us
      */
     public void saveContactMessage(String pubKeyHex, String text, boolean isOut) {
+        saveContactMessage(pubKeyHex, text, isOut, 0);
+    }
+
+    /** Saves a contact message with optional MeshCore packet ID for deduplication. */
+    public void saveContactMessage(String pubKeyHex, String text, boolean isOut, long meshMsgId) {
         long dialogId = contactDialogId(pubKeyHex);
-        persistMessage(dialogId, isOut ? "" : pubKeyHex, text, isOut);
+        persistMessage(dialogId, isOut ? "" : pubKeyHex, text, isOut, meshMsgId);
     }
 
     /**
@@ -389,20 +409,66 @@ public class MeshStorage extends SQLiteOpenHelper {
      */
     @Deprecated
     public void saveMessage(long dialogId, int senderHash, String text, boolean isOut) {
-        persistMessage(dialogId, String.valueOf(senderHash), text, isOut);
+        persistMessage(dialogId, String.valueOf(senderHash), text, isOut, 0);
     }
 
     private void persistMessage(long dialogId, String senderPubkey, String text, boolean isOut) {
+        persistMessage(dialogId, senderPubkey, text, isOut, 0);
+    }
+
+    /**
+     * Persists a message, with optional MeshCore-level deduplication.
+     *
+     * <p>If {@code meshMsgId} is non-zero we insert with INSERT OR IGNORE and the unique
+     * index on (dialog_id, mesh_msg_id) silently drops duplicates.
+     *
+     * <p>If {@code meshMsgId} is zero we fall back to a fuzzy dedup: we skip the insert
+     * if an identical (dialog_id, sender_pubkey, date, text) row already exists in the
+     * last 5 seconds to protect against rapid re-sync replays.
+     */
+    private void persistMessage(long dialogId, String senderPubkey, String text,
+                                boolean isOut, long meshMsgId) {
         storageQueue.postRunnable(() -> {
             try {
                 SQLiteDatabase db = getWritableDatabase();
-                ContentValues v = new ContentValues();
-                v.put("dialog_id",     dialogId);
-                v.put("sender_pubkey", senderPubkey);
-                v.put("text",          text);
-                v.put("date",          (int) (System.currentTimeMillis() / 1000));
-                v.put("is_out",        isOut ? 1 : 0);
-                db.insert("messages", null, v);
+                int nowSec = (int) (System.currentTimeMillis() / 1000);
+
+                if (meshMsgId != 0) {
+                    // Primary dedup path: relies on UNIQUE INDEX (dialog_id, mesh_msg_id)
+                    ContentValues v = new ContentValues();
+                    v.put("dialog_id",     dialogId);
+                    v.put("sender_pubkey", senderPubkey);
+                    v.put("text",          text);
+                    v.put("date",          nowSec);
+                    v.put("is_out",        isOut ? 1 : 0);
+                    v.put("mesh_msg_id",   meshMsgId);
+                    long rowId = db.insertWithOnConflict("messages", null, v,
+                            SQLiteDatabase.CONFLICT_IGNORE);
+                    if (rowId == -1) {
+                        FileLog.d("MeshStorage: duplicate msg ignored (meshMsgId=" + meshMsgId + ")");
+                    }
+                } else {
+                    // Fallback dedup: skip if same content seen in last 5 seconds
+                    try (Cursor dup = db.query("messages",
+                            new String[]{"id"},
+                            "dialog_id=? AND sender_pubkey=? AND text=? AND date>?",
+                            new String[]{String.valueOf(dialogId), senderPubkey, text,
+                                    String.valueOf(nowSec - 5)},
+                            null, null, null, "1")) {
+                        if (dup.moveToFirst()) {
+                            FileLog.d("MeshStorage: fuzzy-duplicate msg ignored");
+                            return;
+                        }
+                    }
+                    ContentValues v = new ContentValues();
+                    v.put("dialog_id",     dialogId);
+                    v.put("sender_pubkey", senderPubkey);
+                    v.put("text",          text);
+                    v.put("date",          nowSec);
+                    v.put("is_out",        isOut ? 1 : 0);
+                    v.put("mesh_msg_id",   0);
+                    db.insert("messages", null, v);
+                }
             } catch (Exception e) {
                 FileLog.e(e);
             }
@@ -531,5 +597,73 @@ public class MeshStorage extends SQLiteOpenHelper {
         public String  text;
         public int     date;
         public boolean isOut;
+    }
+
+    // ============================================================================================
+    // Mesh contact (node) operations — used by MessagesController.getMeshDialogs()
+    // ============================================================================================
+
+    /**
+     * Returns all known Mesh nodes as {@link MeshContact} objects.
+     * Contacts are nodes that have sent or received at least one message.
+     * This is a synchronous DB read — call only when acceptable (e.g. not from GATT callback).
+     */
+    public ArrayList<MeshContact> getMeshContacts() {
+        ArrayList<MeshContact> result = new ArrayList<>();
+        try (Cursor c = getReadableDatabase().query(
+                "nodes",
+                new String[]{"pubkey", "nickname", "tg_user_id"},
+                null, null, null, null, "last_seen DESC")) {
+            while (c.moveToNext()) {
+                MeshContact mc = new MeshContact();
+                mc.pubKeyHex = c.getString(0);
+                mc.name      = c.isNull(1) ? "" : c.getString(1);
+                mc.tgUserId  = c.getLong(2);
+                result.add(mc);
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return result;
+    }
+
+    /**
+     * Returns the text of the most recent message for a LoRa channel slot, or null.
+     * Single-row query — cheap on small message tables.
+     */
+    public String getLastChannelMessageText(int slotIndex) {
+        long dialogId = channelDialogId(slotIndex);
+        try (Cursor c = getReadableDatabase().query(
+                "messages", new String[]{"text"},
+                "dialog_id = ?", new String[]{String.valueOf(dialogId)},
+                null, null, "date DESC", "1")) {
+            if (c.moveToFirst()) return c.getString(0);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return null;
+    }
+
+    /**
+     * Returns the text of the most recent message for a direct Mesh contact, or null.
+     */
+    public String getLastContactMessageText(String pubKeyHex) {
+        long dialogId = contactDialogId(pubKeyHex);
+        try (Cursor c = getReadableDatabase().query(
+                "messages", new String[]{"text"},
+                "dialog_id = ?", new String[]{String.valueOf(dialogId)},
+                null, null, "date DESC", "1")) {
+            if (c.moveToFirst()) return c.getString(0);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return null;
+    }
+
+    /** A Mesh node presented as a contact in the virtual Mesh folder. */
+    public static class MeshContact {
+        public String pubKeyHex;
+        public String name;
+        public long   tgUserId;
     }
 }

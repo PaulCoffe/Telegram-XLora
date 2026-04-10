@@ -104,9 +104,22 @@ public class MeshManager {
     private volatile boolean isWriting = false;
 
     // ---- Reconnect backoff ----
-    private int reconnectAttempts = 0;
-    private static final int MAX_RECONNECT_ATTEMPTS = 3;
+    private int  reconnectAttempts = 0;
+    private int  gattErrorStreak  = 0;   // Phase 7.5: consecutive GATT errors
+    private static final int  MAX_RECONNECT_ATTEMPTS = 3;
+    private static final int  GATT_ANTI_LOOP_THRESHOLD = 3;  // trigger bond-clear after N errors
     private static final long[] RECONNECT_DELAYS_MS = {2000L, 5000L, 15000L};
+
+    /**
+     * Phase 7.2: Offline outgoing queue.
+     * Items are stored as raw byte packets; they are flushed after handshake completes.
+     */
+    private static final class PendingMsg {
+        final byte[] packet;   // ready-to-send BLE payload
+        final Runnable onSave; // saves to MeshStorage (called before/after flush)
+        PendingMsg(byte[] p, Runnable save) { packet = p; onSave = save; }
+    }
+    private final ConcurrentLinkedQueue<PendingMsg> pendingOutbox = new ConcurrentLinkedQueue<>();
 
     private String currentDeviceAddress;
 
@@ -439,6 +452,7 @@ public class MeshManager {
                 FileLog.d(TAG + ": GATT connected [status=" + status + "], discovering services...");
                 isConnected = true;
                 reconnectAttempts = 0;
+                gattErrorStreak = 0; // Phase 7.5: reset error streak on successful connect
                 // Step 1: Discover services
                 gatt.discoverServices();
                 handler.post(() -> { for (MeshManagerListener l : listeners) l.onConnectionStateChanged(true); });
@@ -455,8 +469,28 @@ public class MeshManager {
                 handler.post(() -> { for (MeshManagerListener l : listeners) l.onConnectionStateChanged(false); });
 
                 if (status != BluetoothGatt.GATT_SUCCESS) {
-                    FileLog.e(TAG + ": GATT error (status=" + status + "), scheduling reconnect...");
-                    scheduleReconnect();
+                    gattErrorStreak++;
+                    FileLog.e(TAG + ": GATT error (status=" + status + "), streak=" + gattErrorStreak);
+                    if (gattErrorStreak >= GATT_ANTI_LOOP_THRESHOLD) {
+                        // Phase 7.5: anti-loop — clear bond and re-pair from scratch
+                        FileLog.e(TAG + ": Anti-loop triggered! Clearing BLE bond for " + currentDeviceAddress);
+                        gattErrorStreak = 0;
+                        tryClearBond(gatt.getDevice());
+                        // After bond clear, wait longer before reconnect
+                        handler.postDelayed(() -> {
+                            if (!isConnected && currentDeviceAddress != null) {
+                                BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+                                if (adapter != null && adapter.isEnabled()) {
+                                    reconnectAttempts = 0; // reset backoff after bond clear
+                                    connectToDevice(adapter.getRemoteDevice(currentDeviceAddress));
+                                }
+                            }
+                        }, 8000L);
+                    } else {
+                        scheduleReconnect();
+                    }
+                } else {
+                    gattErrorStreak = 0; // clean disconnect — reset streak
                 }
             }
         }
@@ -672,7 +706,12 @@ public class MeshManager {
                         for (MeshManagerListener l : listeners) l.onConnectionStateChanged(true);
                         Toast.makeText(ApplicationLoader.applicationContext,
                                 "MeshCore подключён", Toast.LENGTH_SHORT).show();
+                        // Phase 7.2: flush offline outgoing queue
+                        flushPendingOutbox();
                     });
+                } else {
+                    // Phase 7.3: no more messages in device queue — nothing to do
+                    FileLog.d(TAG + ": PACKET_NO_MORE_MSGS — queue exhausted");
                 }
                 break;
 
@@ -710,8 +749,25 @@ public class MeshManager {
                 break;
 
             case PACKET_ADVERTISEMENT:
+                FileLog.d(TAG + ": Advertisement packet received (0x80)");
+                break;
+
             case PACKET_ACK:
-                FileLog.d(TAG + ": Received packet type 0x" + String.format("%02X", packetType));
+                // ACK payload (per companion_protocol.md):
+                //   Byte 0: 0x82
+                //   Bytes 1-4: echo of the first 4 bytes of the command that was ACK'd
+                //              (or random_id of the sent message when present)
+                if (data.length >= 5) {
+                    long ackToken = ((long)(data[1] & 0xFF))
+                            | ((long)(data[2] & 0xFF) << 8)
+                            | ((long)(data[3] & 0xFF) << 16)
+                            | ((long)(data[4] & 0xFF) << 24);
+                    FileLog.d(TAG + ": PACKET_ACK token=0x" + String.format("%08X", ackToken)
+                            + " — message delivered to device radio");
+                    // TODO Phase 2: mark outbox message as ACK'd in MeshStorage
+                } else {
+                    FileLog.d(TAG + ": PACKET_ACK (no payload)");
+                }
                 break;
 
             default:
@@ -961,14 +1017,13 @@ public class MeshManager {
     // ============================================================
 
     /**
-     * Sends a text message to channel 0 (public broadcast) or a specific channel index.
+     * Sends a text message to a LoRa channel.
+     * If the device is offline, the message is queued in {@link #pendingOutbox} and
+     * flushed automatically when the handshake completes (Phase 7.2).
+     *
      * Format: [0x03] [0x00] [channel_idx] [ts_LE 4 bytes] [text_UTF8]
      */
     public void sendChannelMessage(int channelIndex, String text) {
-        if (!isHandshakeComplete) {
-            FileLog.e(TAG + ": Cannot send — handshake not complete");
-            return;
-        }
         byte[] textBytes = text.getBytes(StandardCharsets.UTF_8);
         if (textBytes.length > 133) {
             FileLog.e(TAG + ": Message too long (" + textBytes.length + " > 133)");
@@ -984,9 +1039,96 @@ public class MeshManager {
         packet[5] = (byte) ((ts >> 16) & 0xFF);
         packet[6] = (byte) ((ts >> 24) & 0xFF);
         System.arraycopy(textBytes, 0, packet, 7, textBytes.length);
-        enqueueWrite(packet);
-        // Save our outgoing message to history
-        MeshStorage.getInstance().saveChannelMessage(channelIndex, null, text, true);
+
+        Runnable saveToHistory = () ->
+                MeshStorage.getInstance().saveChannelMessage(channelIndex, null, text, true);
+
+        if (isHandshakeComplete) {
+            enqueueWrite(packet);
+            saveToHistory.run();
+        } else {
+            // Offline — queue for later
+            pendingOutbox.add(new PendingMsg(packet, saveToHistory));
+            FileLog.d(TAG + ": Channel msg queued offline (outbox size=" + pendingOutbox.size() + ")");
+        }
+    }
+
+    /**
+     * Sends a direct (DM) message to a Mesh contact.
+     * Format: [0x02] [pubkey 6 bytes] [ts_LE 4 bytes] [text_UTF8]
+     * Queued offline if device not connected (Phase 7.2).
+     *
+     * @param pubKeyHex  hex pubkey prefix of recipient (at least 12 hex chars = 6 bytes)
+     * @param text       message text
+     */
+    public void sendContactMessage(String pubKeyHex, String text) {
+        if (pubKeyHex == null || pubKeyHex.length() < 12) {
+            FileLog.e(TAG + ": Invalid pubkey for DM: " + pubKeyHex);
+            return;
+        }
+        byte[] textBytes = text.getBytes(StandardCharsets.UTF_8);
+        if (textBytes.length > 133) {
+            FileLog.e(TAG + ": DM too long (" + textBytes.length + " > 133)");
+            return;
+        }
+        // Parse 6-byte pubkey prefix from hex
+        byte[] pubBytes = new byte[6];
+        for (int i = 0; i < 6; i++) {
+            pubBytes[i] = (byte) Integer.parseInt(pubKeyHex.substring(i * 2, i * 2 + 2), 16);
+        }
+        int ts = (int) (System.currentTimeMillis() / 1000L);
+        // Packet: [0x02][pub 6 bytes][ts LE 4 bytes][text]
+        byte[] packet = new byte[11 + textBytes.length];
+        packet[0] = 0x02;  // CMD_SEND_MSG
+        System.arraycopy(pubBytes, 0, packet, 1, 6);
+        packet[7]  = (byte) (ts & 0xFF);
+        packet[8]  = (byte) ((ts >> 8) & 0xFF);
+        packet[9]  = (byte) ((ts >> 16) & 0xFF);
+        packet[10] = (byte) ((ts >> 24) & 0xFF);
+        System.arraycopy(textBytes, 0, packet, 11, textBytes.length);
+
+        final String finalPub = pubKeyHex;
+        Runnable saveToHistory = () ->
+                MeshStorage.getInstance().saveContactMessage(finalPub, text, true);
+
+        if (isHandshakeComplete) {
+            enqueueWrite(packet);
+            saveToHistory.run();
+        } else {
+            pendingOutbox.add(new PendingMsg(packet, saveToHistory));
+            FileLog.d(TAG + ": DM queued offline for " + pubKeyHex.substring(0, 8)
+                    + " (outbox size=" + pendingOutbox.size() + ")");
+        }
+    }
+
+    /**
+     * Phase 7.2: Flushes offline outgoing queue.
+     * Called on main thread right after handshake completes.
+     */
+    private void flushPendingOutbox() {
+        if (pendingOutbox.isEmpty()) return;
+        FileLog.d(TAG + ": Flushing " + pendingOutbox.size() + " queued outgoing messages");
+        PendingMsg msg;
+        while ((msg = pendingOutbox.poll()) != null) {
+            enqueueWrite(msg.packet);
+            if (msg.onSave != null) msg.onSave.run();
+        }
+    }
+
+    /**
+     * Phase 7.5: Attempts to remove the BLE bond (via reflection) to force re-pairing.
+     * Needed when GATT 133 repeats 3 times — the bond cache gets stale.
+     */
+    private void tryClearBond(BluetoothDevice device) {
+        if (device == null) return;
+        try {
+            java.lang.reflect.Method removeBond =
+                    BluetoothDevice.class.getMethod("removeBond");
+            boolean result = (boolean) removeBond.invoke(device);
+            FileLog.d(TAG + ": removeBond() result=" + result + " for " + device.getAddress());
+        } catch (Exception e) {
+            FileLog.e(TAG + ": removeBond() reflection failed", e);
+        }
     }
 
     /**

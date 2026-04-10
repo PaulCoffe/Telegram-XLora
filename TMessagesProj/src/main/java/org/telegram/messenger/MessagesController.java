@@ -24101,4 +24101,76 @@ public class MessagesController extends BaseController implements NotificationCe
             loadingStakeDiceInfo = null;
         });
     }
+
+    // =========================================================================
+    // MeshCore integration: Mesh folder dialogs
+    // =========================================================================
+
+    /**
+     * Called when Mesh mode is toggled on/off.
+     * Triggers a full dialogs list reload so the Mesh virtual folder appears/disappears.
+     */
+    public void checkMeshFilter() {
+        AndroidUtilities.runOnUIThread(() -> {
+            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload, true);
+        });
+    }
+
+    /**
+     * Builds a synthetic list of {@link org.telegram.tgnet.TLRPC.Dialog} objects backed by
+     * MeshStorage channel and contact records.  The list is used by the Mesh virtual folder
+     * adapter to render LoRa channels and DM contacts as if they were regular TG dialogs.
+     *
+     * <p>Channel dialogs get negative IDs in range [-10_000_001 .. -10_000_008].
+     * Contact dialogs get negative IDs derived from the first 7 hex digits of their pubkey.
+     *
+     * <p>Threading: safe to call on the main thread; MeshStorage caches in memory.
+     *
+     * @return mutable list, never null
+     */
+    public java.util.ArrayList<org.telegram.tgnet.TLRPC.Dialog> getMeshDialogs() {
+        java.util.ArrayList<org.telegram.tgnet.TLRPC.Dialog> result = new java.util.ArrayList<>();
+
+        if (!org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled()) {
+            return result;
+        }
+
+        org.telegram.messenger.mesh.MeshStorage storage =
+                org.telegram.messenger.mesh.MeshStorage.getInstance();
+
+        // ---- Channel slots (0-7) ----
+        java.util.List<org.telegram.messenger.mesh.MeshStorage.LoraChannel> channels =
+                storage.getLoraChannels();
+        for (org.telegram.messenger.mesh.MeshStorage.LoraChannel ch : channels) {
+            if (ch.name == null || ch.name.isEmpty()) continue;
+
+            org.telegram.messenger.mesh.MeshDialog d = new org.telegram.messenger.mesh.MeshDialog();
+            d.id          = -10_000_001L - ch.slotIndex;   // -10_000_001 … -10_000_008
+            d.meshName    = ch.name;
+            d.lastMessage = storage.getLastChannelMessageText(ch.slotIndex);
+            d.top_message = 0;
+            d.last_message_date = (int) (System.currentTimeMillis() / 1000L);
+            result.add(d);
+        }
+
+        // ---- Mesh DM contacts ----
+        java.util.List<org.telegram.messenger.mesh.MeshStorage.MeshContact> contacts =
+                storage.getMeshContacts();
+        for (org.telegram.messenger.mesh.MeshStorage.MeshContact c : contacts) {
+            org.telegram.messenger.mesh.MeshDialog d = new org.telegram.messenger.mesh.MeshDialog();
+            // Derive a stable negative ID from the first 7 hex chars of the pubkey
+            try {
+                d.id = -(Long.parseLong(c.pubKeyHex.substring(0, 7), 16) + 20_000_000L);
+            } catch (Exception ignored) {
+                d.id = -20_000_000L - result.size();
+            }
+            d.meshName    = (c.name != null && !c.name.isEmpty()) ? c.name : c.pubKeyHex.substring(0, 8) + "…";
+            d.lastMessage = storage.getLastContactMessageText(c.pubKeyHex);
+            d.top_message = 0;
+            d.last_message_date = (int) (System.currentTimeMillis() / 1000L);
+            result.add(d);
+        }
+
+        return result;
+    }
 }
