@@ -5706,7 +5706,7 @@ public class MediaDataController extends BaseController {
                     final Intent intent = new Intent(ApplicationLoader.applicationContext, ShortcutResultReceiver.class);
                     intent.putExtra("account", currentAccount);
                     intent.putExtra("req_id", req_id);
-                    callbackIntent = PendingIntent.getBroadcast(ApplicationLoader.applicationContext, 0, intent, PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                    callbackIntent = PendingIntent.getBroadcast(ApplicationLoader.applicationContext, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
 
                     shortcutCallbacks.put(req_id, callback);
                 }

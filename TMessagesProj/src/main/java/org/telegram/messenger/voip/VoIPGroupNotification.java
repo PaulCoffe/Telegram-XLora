@@ -183,7 +183,7 @@ public class VoIPGroupNotification {
                 PendingIntent.getActivity(
                     context, 0,
                     intent,
-                    PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
+                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
                 )
             );
         SharedPreferences nprefs = MessagesController.getGlobalNotificationsSettings();
@@ -249,7 +249,7 @@ public class VoIPGroupNotification {
                 context,
                 0,
                 endIntent,
-                PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
             );
 
         final Intent answerIntent = new Intent(context, VoIPActionsReceiver.class);
@@ -270,7 +270,7 @@ public class VoIPGroupNotification {
                     .setAction("voip_answer")
                     .putExtra("group_call_invite_msg_id", msg_id)
                     .putExtra("currentAccount", account),
-                PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
             );
 
         builder.setPriority(Notification.PRIORITY_MAX);
@@ -281,7 +281,7 @@ public class VoIPGroupNotification {
             builder.setColor(0xff2ca5e0);
             builder.setVibrate(new long[0]);
             builder.setCategory(Notification.CATEGORY_CALL);
-            builder.setFullScreenIntent(PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_MUTABLE), true);
+            builder.setFullScreenIntent(PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE), true);
         }
 
         final Intent hideIntent = new Intent(ApplicationLoader.applicationContext, VoIPActionsReceiver.class);
@@ -293,7 +293,7 @@ public class VoIPGroupNotification {
                 ApplicationLoader.applicationContext,
                 0,
                 hideIntent,
-                PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
             );
         builder.setDeleteIntent(hidePendingIntent);
 

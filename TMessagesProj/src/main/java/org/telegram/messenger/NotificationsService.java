@@ -29,12 +29,7 @@ public class NotificationsService extends Service {
         super.onCreate();
         ApplicationLoader.postInitApplication();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            int pendingIntentFlags;
-            if (Build.VERSION.SDK_INT >= 34) {
-                pendingIntentFlags = PendingIntent.FLAG_IMMUTABLE;
-            } else {
-                pendingIntentFlags = PendingIntent.FLAG_MUTABLE;
-            }
+            int pendingIntentFlags = PendingIntent.FLAG_IMMUTABLE;
             String CHANNEL_ID = "push_service_channel";
             NotificationManager notificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             NotificationChannel channel = new NotificationChannel(CHANNEL_ID,"Push Notifications Service",NotificationManager.IMPORTANCE_DEFAULT);

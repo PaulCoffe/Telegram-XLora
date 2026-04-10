@@ -147,7 +147,7 @@ public class VoIPPreNotificationService { // } extends Service implements AudioM
                 PendingIntent.getActivity(
                     context, 0,
                     intent,
-                    PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
+                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
                 )
             );
 
@@ -213,7 +213,7 @@ public class VoIPPreNotificationService { // } extends Service implements AudioM
                 context,
                 0,
                 endIntent,
-                PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
             );
 
         final Intent answerIntent = new Intent(context, VoIPActionsReceiver.class);
@@ -229,7 +229,7 @@ public class VoIPPreNotificationService { // } extends Service implements AudioM
                 context,
                 0,
                 new Intent(context, LaunchActivity.class).setAction("voip_answer"),
-                PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_CANCEL_CURRENT
             );
 
         builder.setPriority(Notification.PRIORITY_MAX);
@@ -240,7 +240,7 @@ public class VoIPPreNotificationService { // } extends Service implements AudioM
             builder.setColor(0xff2ca5e0);
             builder.setVibrate(new long[0]);
             builder.setCategory(Notification.CATEGORY_CALL);
-            builder.setFullScreenIntent(PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_MUTABLE), true);
+            builder.setFullScreenIntent(PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE), true);
             if (user != null && !TextUtils.isEmpty(user.phone)) {
                 builder.addPerson("tel:" + user.phone);
             }
@@ -253,7 +253,7 @@ public class VoIPPreNotificationService { // } extends Service implements AudioM
                 ApplicationLoader.applicationContext,
                 0,
                 hideIntent,
-                PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
             );
         builder.setDeleteIntent(hidePendingIntent);
 
@@ -538,7 +538,7 @@ public class VoIPPreNotificationService { // } extends Service implements AudioM
                 isVideo() && !PermissionRequest.hasPermission(Manifest.permission.CAMERA)
             ) {
                 try {
-                    PendingIntent.getActivity(context, 0, new Intent(context, VoIPPermissionActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_ONE_SHOT).send();
+                    PendingIntent.getActivity(context, 0, new Intent(context, VoIPPermissionActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_ONE_SHOT).send();
                 } catch (Exception x) {
                     if (BuildVars.LOGS_ENABLED) {
                         FileLog.e("Error starting permission activity", x);
