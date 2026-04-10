@@ -24107,16 +24107,6 @@ public class MessagesController extends BaseController implements NotificationCe
     // =========================================================================
 
     /**
-     * Called when Mesh mode is toggled on/off.
-     * Triggers a full dialogs list reload so the Mesh virtual folder appears/disappears.
-     */
-    public void checkMeshFilter() {
-        AndroidUtilities.runOnUIThread(() -> {
-            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload, true);
-        });
-    }
-
-    /**
      * Builds a synthetic list of {@link org.telegram.tgnet.TLRPC.Dialog} objects backed by
      * MeshStorage channel and contact records.  The list is used by the Mesh virtual folder
      * adapter to render LoRa channels and DM contacts as if they were regular TG dialogs.
