@@ -53,6 +53,21 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
     }
 
     private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
+        // Connection Status Section
+        items.add(UItem.asHeader("Статус соединения"));
+        String status;
+        if (MeshManager.getInstance().isConnected()) {
+            if (MeshManager.getInstance().isHandshakeComplete()) {
+                status = "Подключено (Mesh готов)";
+            } else {
+                status = "Синхронизация параметров...";
+            }
+        } else {
+            status = "Отключено";
+        }
+        items.add(UItem.asButton(0, "MeshCore Node", status).accent());
+        items.add(UItem.asShadow(null));
+
         items.add(UItem.asCheck(1, "Включить LoRa Mesh").setChecked(MeshTransportManager.getInstance().isMeshEnabled()));
         items.add(UItem.asShadow("Если включено, сообщения будут отправляться через LoRa при отсутствии интернет-соединения."));
         

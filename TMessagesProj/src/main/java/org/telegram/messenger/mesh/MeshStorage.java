@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.DispatchQueue;
 import java.util.ArrayList;
 
 public class MeshStorage extends SQLiteOpenHelper {
@@ -14,12 +15,17 @@ public class MeshStorage extends SQLiteOpenHelper {
     private static final int DATABASE_VERSION = 1;
 
     private static MeshStorage Instance;
+    private final DispatchQueue storageQueue = new DispatchQueue("MeshStorageQueue");
 
     public static MeshStorage getInstance() {
         if (Instance == null) {
             Instance = new MeshStorage();
         }
         return Instance;
+    }
+
+    public DispatchQueue getStorageQueue() {
+        return storageQueue;
     }
 
     private MeshStorage() {
@@ -58,26 +64,38 @@ public class MeshStorage extends SQLiteOpenHelper {
     }
 
     public void updateNode(String pubkey, String nickname, int rssi, int hops) {
-        SQLiteDatabase db = getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put("pubkey", pubkey);
-        if (nickname != null) values.put("nickname", nickname);
-        values.put("last_seen", System.currentTimeMillis());
-        values.put("last_rssi", rssi);
-        values.put("last_hops", hops);
-        db.insertWithOnConflict("nodes", null, values, SQLiteDatabase.CONFLICT_REPLACE);
-        org.telegram.messenger.AndroidUtilities.runOnUIThread(() -> {
-            org.telegram.messenger.NotificationCenter.getGlobalInstance().postNotificationName(org.telegram.messenger.NotificationCenter.didUpdateMeshNodes);
+        storageQueue.postRunnable(() -> {
+            try {
+                SQLiteDatabase db = getWritableDatabase();
+                ContentValues values = new ContentValues();
+                values.put("pubkey", pubkey);
+                if (nickname != null) values.put("nickname", nickname);
+                values.put("last_seen", System.currentTimeMillis());
+                values.put("last_rssi", rssi);
+                values.put("last_hops", hops);
+                db.insertWithOnConflict("nodes", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+                org.telegram.messenger.AndroidUtilities.runOnUIThread(() -> {
+                    org.telegram.messenger.NotificationCenter.getGlobalInstance().postNotificationName(org.telegram.messenger.NotificationCenter.didUpdateMeshNodes);
+                });
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
         });
     }
 
     public void linkNodeToUser(String pubkey, long tgUserId) {
-        SQLiteDatabase db = getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put("tg_user_id", tgUserId);
-        db.update("nodes", values, "pubkey = ?", new String[]{pubkey});
-        org.telegram.messenger.AndroidUtilities.runOnUIThread(() -> {
-            org.telegram.messenger.NotificationCenter.getGlobalInstance().postNotificationName(org.telegram.messenger.NotificationCenter.didUpdateMeshNodes);
+        storageQueue.postRunnable(() -> {
+            try {
+                SQLiteDatabase db = getWritableDatabase();
+                ContentValues values = new ContentValues();
+                values.put("tg_user_id", tgUserId);
+                db.update("nodes", values, "pubkey = ?", new String[]{pubkey});
+                org.telegram.messenger.AndroidUtilities.runOnUIThread(() -> {
+                    org.telegram.messenger.NotificationCenter.getGlobalInstance().postNotificationName(org.telegram.messenger.NotificationCenter.didUpdateMeshNodes);
+                });
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
         });
     }
 
@@ -111,20 +129,26 @@ public class MeshStorage extends SQLiteOpenHelper {
     }
 
     public void saveMessage(long dialogId, int senderHash, String text, boolean isOut) {
-        SQLiteDatabase db = getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put("dialog_id", dialogId);
-        values.put("sender_hash", senderHash);
-        values.put("text", text);
-        values.put("date", (int) (System.currentTimeMillis() / 1000));
-        values.put("is_out", isOut ? 1 : 0);
-        db.insert("messages", null, values);
+        storageQueue.postRunnable(() -> {
+            try {
+                SQLiteDatabase db = getWritableDatabase();
+                ContentValues values = new ContentValues();
+                values.put("dialog_id", dialogId);
+                values.put("sender_hash", senderHash);
+                values.put("text", text);
+                values.put("date", (int) (System.currentTimeMillis() / 1000));
+                values.put("is_out", isOut ? 1 : 0);
+                db.insert("messages", null, values);
 
-        // Update dialog/channel last message reference if needed
-        ContentValues channelValues = new ContentValues();
-        channelValues.put("hash", senderHash);
-        channelValues.put("name", "Mesh User " + senderHash);
-        db.insertWithOnConflict("channels", null, channelValues, SQLiteDatabase.CONFLICT_IGNORE);
+                // Update dialog/channel last message reference if needed
+                ContentValues channelValues = new ContentValues();
+                channelValues.put("hash", senderHash);
+                channelValues.put("name", "Mesh User " + senderHash);
+                db.insertWithOnConflict("channels", null, channelValues, SQLiteDatabase.CONFLICT_IGNORE);
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        });
     }
 
     public ArrayList<MeshChannel> getChannels() {

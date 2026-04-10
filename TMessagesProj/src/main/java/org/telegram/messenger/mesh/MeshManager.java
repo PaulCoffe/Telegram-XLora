@@ -134,6 +134,18 @@ public class MeshManager {
         ApplicationLoader.applicationContext.registerReceiver(pairingReceiver, filter);
     }
 
+    public boolean isScanning() {
+        return isScanning;
+    }
+
+    public boolean isConnected() {
+        return isConnected;
+    }
+
+    public boolean isHandshakeComplete() {
+        return isHandshakeComplete;
+    }
+
     public void startScanningIfPermissionsGranted() {
         if (ApplicationLoader.applicationContext != null) {
             boolean granted;
@@ -150,19 +162,22 @@ public class MeshManager {
     }
 
     public void startScanning() {
-        if (isScanning) return;
+        if (isScanning) {
+            FileLog.d(TAG + ": Scan already in progress");
+            return;
+        }
         
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter == null || !adapter.isEnabled()) {
             FileLog.e(TAG + ": Bluetooth not available or disabled");
-            Toast.makeText(ApplicationLoader.applicationContext, "Bluetooth выключен", Toast.LENGTH_SHORT).show();
+            handler.post(() -> Toast.makeText(ApplicationLoader.applicationContext, "Bluetooth выключен", Toast.LENGTH_SHORT).show());
             return;
         }
 
         // Check Location services (required for BLE scanning)
         android.location.LocationManager lm = (android.location.LocationManager) ApplicationLoader.applicationContext.getSystemService(Context.LOCATION_SERVICE);
-        if (!lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)) {
-            Toast.makeText(ApplicationLoader.applicationContext, "Включите Геолокацию для поиска устройств", Toast.LENGTH_LONG).show();
+        if (lm != null && !lm.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER)) {
+            handler.post(() -> Toast.makeText(ApplicationLoader.applicationContext, "Включите Геолокацию для поиска устройств", Toast.LENGTH_LONG).show());
         }
 
         // Permission check for Android 12+
@@ -185,6 +200,7 @@ public class MeshManager {
             
             android.bluetooth.le.ScanSettings settings = new android.bluetooth.le.ScanSettings.Builder()
                 .setScanMode(android.bluetooth.le.ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .setCallbackType(android.bluetooth.le.ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
                 .build();
                 
             java.util.List<android.bluetooth.le.ScanFilter> filters = new java.util.ArrayList<>();
@@ -194,19 +210,25 @@ public class MeshManager {
 
             scanner.startScan(filters, settings, scanCallback);
             FileLog.d(TAG + ": Scan started with filters and low latency");
-            Toast.makeText(ApplicationLoader.applicationContext, "Поиск устройств MeshCore...", Toast.LENGTH_SHORT).show();
+            handler.post(() -> Toast.makeText(ApplicationLoader.applicationContext, "Поиск устройств MeshCore...", Toast.LENGTH_SHORT).show());
         } catch (Exception e) {
-            FileLog.e(TAG + ": Exception starting scan: " + e.getMessage());
+            FileLog.e(TAG + ": Exception starting scan", e);
             isScanning = false;
             return;
         }
         
-        // Stop scanning after 30 seconds
-        handler.postDelayed(() -> stopScanning(), 30000);
+        // Stop scanning after 30 seconds if not found target yet
+        handler.removeCallbacks(stopScanRunnable);
+        handler.postDelayed(stopScanRunnable, 30000);
     }
+
+    private final Runnable stopScanRunnable = this::stopScanning;
 
     public void stopScanning() {
         if (!isScanning) return;
+        isScanning = false;
+        handler.removeCallbacks(stopScanRunnable);
+        
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter != null && adapter.getBluetoothLeScanner() != null) {
             try {
@@ -217,11 +239,17 @@ public class MeshManager {
                     }
                 }
                 adapter.getBluetoothLeScanner().stopScan(scanCallback);
+                FileLog.d(TAG + ": Scan stopped manually");
             } catch (Exception e) {
-                FileLog.e(TAG + ": Error stopping scan: " + e.getMessage());
+                FileLog.e(TAG + ": Error stopping scan", e);
             }
         }
-        isScanning = false;
+        
+        handler.post(() -> {
+            for (MeshManagerListener l : listeners) {
+                l.onDevicesUpdated();
+            }
+        });
     }
 
     private final ScanCallback scanCallback = new ScanCallback() {
@@ -376,19 +404,28 @@ public class MeshManager {
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             isWriting = false;
             
-            // Logic to chain handshake commands
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 byte[] val = characteristic.getValue();
                 if (val != null && val.length == 1) {
-                    if (val[0] == CMD_APP_START) {
-                        handler.postDelayed(() -> sendHandshakeCommand(CMD_GET_CONFIG), 200);
-                    } else if (val[0] == CMD_GET_CONFIG) {
-                        handler.postDelayed(() -> sendHandshakeCommand(CMD_GET_CONTACTS), 200);
-                    } else if (val[0] == CMD_GET_CONTACTS) {
+                    final byte lastCmd = val[0];
+                    if (lastCmd == CMD_APP_START) {
+                        FileLog.d(TAG + ": Handshake Step 1 complete. Fetching config...");
+                        handler.postDelayed(() -> sendHandshakeCommand(CMD_GET_CONFIG), 150);
+                    } else if (lastCmd == CMD_GET_CONFIG) {
+                        FileLog.d(TAG + ": Handshake Step 2 complete. Fetching contacts...");
+                        handler.postDelayed(() -> sendHandshakeCommand(CMD_GET_CONTACTS), 150);
+                    } else if (lastCmd == CMD_GET_CONTACTS) {
                         isHandshakeComplete = true;
-                        FileLog.d(TAG + ": Handshake complete");
+                        FileLog.d(TAG + ": Handshake complete. Mesh node ready.");
+                        handler.post(() -> {
+                            for (MeshManagerListener l : listeners) {
+                                l.onConnectionStateChanged(true);
+                            }
+                        });
                     }
                 }
+            } else {
+                FileLog.e(TAG + ": GATT Write failed with status: " + status);
             }
             
             processWriteQueue();
@@ -402,8 +439,22 @@ public class MeshManager {
         byte[] nextPacket = writeQueue.poll();
         if (nextPacket != null) {
             isWriting = true;
-            rxCharacteristic.setValue(nextPacket);
-            bluetoothGatt.writeCharacteristic(rxCharacteristic);
+            try {
+                rxCharacteristic.setValue(nextPacket);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (ActivityCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                        bluetoothGatt.writeCharacteristic(rxCharacteristic);
+                    } else {
+                        isWriting = false;
+                    }
+                } else {
+                    bluetoothGatt.writeCharacteristic(rxCharacteristic);
+                }
+            } catch (Exception e) {
+                FileLog.e(TAG + ": Error writing to characteristic", e);
+                isWriting = false;
+                processWriteQueue();
+            }
         }
     }
 
