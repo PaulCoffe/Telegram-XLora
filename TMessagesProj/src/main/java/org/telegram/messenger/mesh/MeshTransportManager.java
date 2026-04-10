@@ -429,3 +429,4 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
             FileLog.e("MeshTransportManager: failed to inject LoRa message into TG chat", e);
         }
     }
+}
