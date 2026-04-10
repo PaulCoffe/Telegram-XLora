@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.BluetoothLeScanner;
@@ -55,6 +56,8 @@ public class MeshManager {
     private static final UUID UART_SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e");
     private static final UUID RX_CHARACTERISTIC_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e"); // Write
     private static final UUID TX_CHARACTERISTIC_UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e"); // Notify
+    // Standard BLE Client Characteristic Configuration Descriptor (CCCD)
+    private static final UUID CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 
     // MeshCore AES-256 PSK (32 bytes).
     private static final byte[] MESH_PSK = new byte[] {
@@ -94,7 +97,7 @@ public class MeshManager {
     private boolean isScanning = false;
     private boolean isConnected = false;
     private final ConcurrentLinkedQueue<byte[]> writeQueue = new ConcurrentLinkedQueue<>();
-    private boolean isWriting = false;
+    private volatile boolean isWriting = false;
     public interface MeshManagerListener {
         void onDevicesUpdated();
         void onConnectionStateChanged(boolean connected);
@@ -351,23 +354,29 @@ public class MeshManager {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                FileLog.d(TAG + ": GATT Connected, discovering services...");
+                FileLog.d(TAG + ": GATT Connected [status=" + status + "], discovering services...");
                 isConnected = true;
-                for (MeshManagerListener l : listeners) {
-                    l.onConnectionStateChanged(true);
-                }
+                // MintyLinux sequence Step 1: discoverServices first
+                // requestMtu will be called in onServicesDiscovered
                 gatt.discoverServices();
-                // Request larger MTU for MeshCore packets
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    gatt.requestMtu(512);
-                }
+                handler.post(() -> {
+                    for (MeshManagerListener l : listeners) {
+                        l.onConnectionStateChanged(true);
+                    }
+                });
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                FileLog.d(TAG + ": GATT Disconnected");
+                FileLog.d(TAG + ": GATT Disconnected [status=" + status + "]");
                 isConnected = false;
-                for (MeshManagerListener l : listeners) {
-                    l.onConnectionStateChanged(false);
-                }
+                isHandshakeComplete = false;
+                isWriting = false;
+                // Clear stale packets to prevent memory leak and wrong packets on reconnect
+                writeQueue.clear();
                 rxCharacteristic = null;
+                handler.post(() -> {
+                    for (MeshManagerListener l : listeners) {
+                        l.onConnectionStateChanged(false);
+                    }
+                });
             }
         }
 
@@ -377,15 +386,16 @@ public class MeshManager {
                 BluetoothGattService service = gatt.getService(UART_SERVICE_UUID);
                 if (service != null) {
                     rxCharacteristic = service.getCharacteristic(RX_CHARACTERISTIC_UUID);
-                    BluetoothGattCharacteristic tx = service.getCharacteristic(TX_CHARACTERISTIC_UUID);
-                    if (tx != null) {
-                        gatt.setCharacteristicNotification(tx, true);
-                        FileLog.d(TAG + ": UART Service configured, RX/TX ready");
-                        
-                        // Start automated handshake
-                        isHandshakeComplete = false;
-                        sendHandshakeCommand(CMD_APP_START);
+                    // MintyLinux sequence Step 2: request MTU after services are discovered
+                    FileLog.d(TAG + ": Services discovered. Requesting MTU 512...");
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        gatt.requestMtu(512);
+                    } else {
+                        // Fallback for old Android: enable notifications directly
+                        enableNotificationsOnTx(gatt, service);
                     }
+                } else {
+                    FileLog.e(TAG + ": UART Service not found on device!");
                 }
             } else {
                 FileLog.e(TAG + ": Service discovery failed with status: " + status);
@@ -393,8 +403,33 @@ public class MeshManager {
         }
 
         @Override
+        public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
+            // MintyLinux sequence Step 3: enable notifications via CCCD descriptor 0x2902
+            FileLog.d(TAG + ": MTU changed to " + mtu + " [status=" + status + "]");
+            BluetoothGattService service = gatt.getService(UART_SERVICE_UUID);
+            if (service != null) {
+                enableNotificationsOnTx(gatt, service);
+            }
+        }
+
+        @Override
+        public void onDescriptorWrite(BluetoothGatt gatt, android.bluetooth.BluetoothGattDescriptor descriptor, int status) {
+            if (CCCD_UUID.equals(descriptor.getUuid())) {
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    FileLog.d(TAG + ": CCCD descriptor written. Notifications enabled. Starting handshake...");
+                    isHandshakeComplete = false;
+                    // MintyLinux sequence Step 4: start handshake only after descriptor confirmed
+                    handler.postDelayed(() -> sendHandshakeCommand(CMD_APP_START), 200);
+                } else {
+                    FileLog.e(TAG + ": Failed to write CCCD descriptor, status: " + status);
+                }
+            }
+        }
+
+        @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
             if (characteristic.getUuid().equals(TX_CHARACTERISTIC_UUID)) {
+                // getValue() on GATT thread is safe; processIncomingPacket handles its own threading
                 byte[] data = characteristic.getValue();
                 processIncomingPacket(data);
             }
@@ -403,7 +438,7 @@ public class MeshManager {
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
             isWriting = false;
-            
+
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 byte[] val = characteristic.getValue();
                 if (val != null && val.length == 1) {
@@ -427,10 +462,44 @@ public class MeshManager {
             } else {
                 FileLog.e(TAG + ": GATT Write failed with status: " + status);
             }
-            
+
             processWriteQueue();
         }
     };
+
+    /**
+     * Enables BLE notifications on the TX characteristic by writing to the CCCD
+     * descriptor (0x2902). This is required by the BLE spec and the MintyLinux
+     * reference implementation to guarantee notifications are delivered.
+     */
+    private void enableNotificationsOnTx(BluetoothGatt gatt, BluetoothGattService service) {
+        BluetoothGattCharacteristic tx = service.getCharacteristic(TX_CHARACTERISTIC_UUID);
+        if (tx == null) {
+            FileLog.e(TAG + ": TX characteristic not found!");
+            return;
+        }
+        // Step 1: register with the local Android BLE stack
+        gatt.setCharacteristicNotification(tx, true);
+        // Step 2: write CCCD descriptor on the remote device (mandatory for hardware ACK)
+        BluetoothGattDescriptor descriptor = tx.getDescriptor(CCCD_UUID);
+        if (descriptor != null) {
+            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            boolean written = false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                if (ActivityCompat.checkSelfPermission(ApplicationLoader.applicationContext, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+                    written = gatt.writeDescriptor(descriptor);
+                }
+            } else {
+                written = gatt.writeDescriptor(descriptor);
+            }
+            FileLog.d(TAG + ": Writing CCCD descriptor (0x2902): " + written);
+        } else {
+            FileLog.e(TAG + ": CCCD descriptor (0x2902) not found! Proceeding without it (hardware may not send notifications).");
+            // Fallback: start handshake anyway
+            isHandshakeComplete = false;
+            handler.postDelayed(() -> sendHandshakeCommand(CMD_APP_START), 200);
+        }
+    }
 
     private synchronized void processWriteQueue() {
         if (isWriting || writeQueue.isEmpty() || rxCharacteristic == null || bluetoothGatt == null) {
@@ -592,7 +661,7 @@ public class MeshManager {
         packet[9] = 20; // Default Power 20dBm
         
         sendPacket(packet);
-        Toast.makeText(ApplicationLoader.applicationContext, "Настройки радио отправлены", Toast.LENGTH_SHORT).show();
+        handler.post(() -> Toast.makeText(ApplicationLoader.applicationContext, "Настройки радио отправлены", Toast.LENGTH_SHORT).show());
     }
 
     private void sendHandshakeCommand(byte cmd) {
