@@ -7,7 +7,11 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.TLRPC;
 import java.util.ArrayList;
+import java.util.List;
 import android.util.Base64;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
 
 /**
  * MeshTransportManager maintains the global state of the Mesh transport.
@@ -28,6 +32,54 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
             }
         }
         return localInstance;
+    }
+
+    public static class MeshPreset {
+        public String name;
+        public long frequency;
+        public float bandwidth;
+        public int spreadingFactor;
+        public int codingRate;
+        public boolean isSystem;
+
+        public MeshPreset(String name, long frequency, float bandwidth, int spreadingFactor, int codingRate, boolean isSystem) {
+            this.name = name;
+            this.frequency = frequency;
+            this.bandwidth = bandwidth;
+            this.spreadingFactor = spreadingFactor;
+            this.codingRate = codingRate;
+            this.isSystem = isSystem;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof MeshPreset)) return false;
+            MeshPreset other = (MeshPreset) obj;
+            return frequency == other.frequency && bandwidth == other.bandwidth && 
+                   spreadingFactor == other.spreadingFactor && codingRate == other.codingRate;
+        }
+    }
+
+    private static final List<MeshPreset> SYSTEM_PRESETS = new ArrayList<>();
+    static {
+        SYSTEM_PRESETS.add(new MeshPreset("Москва (MOW)", 868731018L, 62.5f, 7, 7, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Липецк (LPK)", 868950012L, 62.5f, 9, 7, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Бийск (BSK)", 869000000L, 62.5f, 8, 5, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Иркутск (IKT)", 868731018L, 62.5f, 7, 7, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Иваново (IWA)", 868731018L, 62.5f, 8, 8, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Хабаровск (KHV)", 864281250L, 62.5f, 8, 6, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Тверь (KLD)", 869169000L, 62.5f, 8, 8, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Калуга (KLF)", 868731018L, 62.5f, 7, 7, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Киров (KVX)", 868731018L, 62.5f, 8, 8, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Казань (KZN)", 868731018L, 62.5f, 8, 6, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Новосибирск (OVB)", 869000000L, 62.5f, 9, 8, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Ростов-на-Дону (ROV)", 868731018L, 62.5f, 9, 7, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Рязань (RZN)", 868880000L, 62.5f, 9, 5, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Екатеринбург (SVX)", 869047000L, 62.5f, 7, 7, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Тамбов (TBW)", 868950000L, 125.0f, 10, 5, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Тула (TYA)", 868731018L, 62.5f, 7, 8, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Волгоград (VOG)", 869525000L, 62.5f, 7, 7, true));
+        SYSTEM_PRESETS.add(new MeshPreset("Владивосток (VVO)", 864281250L, 62.5f, 8, 6, true));
     }
 
     private long frequency;
@@ -97,6 +149,77 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
         SharedPreferences.Editor editor = ApplicationLoader.applicationContext.getSharedPreferences("mesh_config", Context.MODE_PRIVATE).edit();
         editor.putString("mesh_device_address", address);
         editor.apply();
+    }
+
+    public List<MeshPreset> getPresets() {
+        List<MeshPreset> all = new ArrayList<>(SYSTEM_PRESETS);
+        SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mesh_config", Context.MODE_PRIVATE);
+        String json = preferences.getString("user_presets", null);
+        if (json != null) {
+            try {
+                Gson gson = new Gson();
+                Type type = new TypeToken<ArrayList<MeshPreset>>() {}.getType();
+                List<MeshPreset> userPresets = gson.fromJson(json, type);
+                if (userPresets != null) {
+                    all.addAll(userPresets);
+                }
+            } catch (Exception e) {
+                org.telegram.messenger.FileLog.e(e);
+            }
+        }
+        return all;
+    }
+
+    public void saveUserPreset(String name) {
+        List<MeshPreset> userPresets = getUserPresetsOnly();
+        // Remove existing if same name
+        for (int i = 0; i < userPresets.size(); i++) {
+            if (userPresets.get(i).name.equalsIgnoreCase(name)) {
+                userPresets.remove(i);
+                break;
+            }
+        }
+        userPresets.add(new MeshPreset(name, frequency, bandwidth, spreadingFactor, codingRate, false));
+        saveUserPresetsList(userPresets);
+    }
+
+    public void deleteUserPreset(String name) {
+        List<MeshPreset> userPresets = getUserPresetsOnly();
+        for (int i = 0; i < userPresets.size(); i++) {
+            if (userPresets.get(i).name.equalsIgnoreCase(name)) {
+                userPresets.remove(i);
+                break;
+            }
+        }
+        saveUserPresetsList(userPresets);
+    }
+
+    private List<MeshPreset> getUserPresetsOnly() {
+        SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mesh_config", Context.MODE_PRIVATE);
+        String json = preferences.getString("user_presets", null);
+        if (json != null) {
+            try {
+                Gson gson = new Gson();
+                Type type = new TypeToken<ArrayList<MeshPreset>>() {}.getType();
+                List<MeshPreset> userPresets = gson.fromJson(json, type);
+                if (userPresets != null) return userPresets;
+            } catch (Exception e) {}
+        }
+        return new ArrayList<>();
+    }
+
+    private void saveUserPresetsList(List<MeshPreset> list) {
+        SharedPreferences.Editor editor = ApplicationLoader.applicationContext.getSharedPreferences("mesh_config", Context.MODE_PRIVATE).edit();
+        editor.putString("user_presets", new Gson().toJson(list));
+        editor.apply();
+    }
+
+    public String getCurrentPresetName() {
+        MeshPreset current = new MeshPreset("", frequency, bandwidth, spreadingFactor, codingRate, false);
+        for (MeshPreset p : getPresets()) {
+            if (p.equals(current)) return p.name;
+        }
+        return "Custom";
     }
 
     @Override

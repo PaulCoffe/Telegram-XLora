@@ -253,6 +253,10 @@ def getProps(String propName) {
 
 task buildNativeDeps(description: 'Build native dependencies.') {
     doFirst {
+        def libvpxDir = file("${projectDir}/jni/libvpx")
+        if (!libvpxDir.exists()) {
+            libvpxDir.mkdirs()
+        }
         exec {
             def ndkDir = android.ndkDirectory
             println "NDK Directory: ${ndkDir}"

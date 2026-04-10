@@ -76,7 +76,8 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
         items.add(UItem.asButton(201, "Полоса (кГц)", String.valueOf(MeshTransportManager.getInstance().getBandwidth())));
         items.add(UItem.asButton(202, "SF (SF7...SF12)", String.valueOf(MeshTransportManager.getInstance().getSpreadingFactor())));
         items.add(UItem.asButton(203, "CR (4/5...4/8)", "4/" + MeshTransportManager.getInstance().getCodingRate()));
-        items.add(UItem.asButton(204, "Пресет: Москва").accent());
+        items.add(UItem.asButton(204, "Регион / Пресет", MeshTransportManager.getInstance().getCurrentPresetName()).accent());
+        items.add(UItem.asButton(205, "Сохранить текущие настройки как пресет"));
         items.add(UItem.asShadow(null));
 
         items.add(UItem.asShadow(null));
@@ -153,10 +154,16 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
                 MeshTransportManager.getInstance().setRadioConfig(MeshTransportManager.getInstance().getFrequency(), MeshTransportManager.getInstance().getBandwidth(), MeshTransportManager.getInstance().getSpreadingFactor(), Integer.parseInt(val));
                 listView.adapter.update(true);
             });
-        } else if (item.id == 204) { // Moscow Preset
-            MeshTransportManager.getInstance().setRadioConfig(868731018L, 62.5f, 7, 7);
-            listView.adapter.update(true);
-            android.widget.Toast.makeText(getParentActivity(), "Применен пресет: Москва", android.widget.Toast.LENGTH_SHORT).show();
+        } else if (item.id == 204) { // Preset Selection
+            showPresetSelector();
+        } else if (item.id == 205) { // Save Current as Preset
+            showNumberInput("Название пресета", "", (name) -> {
+                if (name != null && !name.trim().isEmpty()) {
+                    MeshTransportManager.getInstance().saveUserPreset(name.trim());
+                    listView.adapter.update(true);
+                    android.widget.Toast.makeText(getParentActivity(), "Пресет '" + name + "' сохранен", android.widget.Toast.LENGTH_SHORT).show();
+                }
+            });
         } else if (item.id >= 1000) {
             int idx = item.id - 1000;
             ArrayList<MeshStorage.MeshNode> nodes = MeshStorage.getInstance().getAllNodes();
@@ -205,12 +212,58 @@ public class MeshSettingsActivity extends BaseFragment implements MeshManager.Me
         showDialog(builder.create());
     }
 
+    private void showPresetSelector() {
+        List<MeshTransportManager.MeshPreset> presets = MeshTransportManager.getInstance().getPresets();
+        CharSequence[] names = new CharSequence[presets.size()];
+        for (int i = 0; i < presets.size(); i++) {
+            names[i] = presets.get(i).name + (presets.get(i).isSystem ? " (Системный)" : "");
+        }
+
+        org.telegram.ui.ActionBar.AlertDialog.Builder builder = new org.telegram.ui.ActionBar.AlertDialog.Builder(getParentActivity());
+        builder.setTitle("Выберите регион или пресет");
+        builder.setItems(names, (dialog, which) -> {
+            if (which >= 0 && which < presets.size()) {
+                MeshTransportManager.MeshPreset p = presets.get(which);
+                if (!p.isSystem) {
+                    showPresetOptions(p);
+                } else {
+                    applyPreset(p);
+                }
+            }
+        });
+        showDialog(builder.create());
+    }
+
+    private void showPresetOptions(MeshTransportManager.MeshPreset p) {
+        org.telegram.ui.ActionBar.AlertDialog.Builder builder = new org.telegram.ui.ActionBar.AlertDialog.Builder(getParentActivity());
+        builder.setTitle(p.name);
+        builder.setItems(new CharSequence[]{"Применить", "Удалить"}, (dialog, which) -> {
+            if (which == 0) {
+                applyPreset(p);
+            } else if (which == 1) {
+                MeshTransportManager.getInstance().deleteUserPreset(p.name);
+                listView.adapter.update(true);
+            }
+        });
+        showDialog(builder.create());
+    }
+
+    private void applyPreset(MeshTransportManager.MeshPreset p) {
+        MeshTransportManager.getInstance().setRadioConfig(p.frequency, p.bandwidth, p.spreadingFactor, p.codingRate);
+        listView.adapter.update(true);
+        android.widget.Toast.makeText(getParentActivity(), "Применен пресет: " + p.name, android.widget.Toast.LENGTH_SHORT).show();
+    }
+
     private void showNumberInput(String title, String current, org.telegram.messenger.Utilities.Callback<String> callback) {
         org.telegram.ui.ActionBar.AlertDialog.Builder builder = new org.telegram.ui.ActionBar.AlertDialog.Builder(getParentActivity());
         builder.setTitle(title);
         final android.widget.EditText editText = new android.widget.EditText(getParentActivity());
         editText.setText(current);
-        editText.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        if (title.contains("Название")) {
+            editText.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+        } else {
+            editText.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        }
         FrameLayout container = new FrameLayout(getParentActivity());
         container.addView(editText, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 20, 10, 20, 10));
         builder.setView(container);
