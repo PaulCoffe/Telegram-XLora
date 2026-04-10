@@ -207,11 +207,11 @@ public class MeshManager {
             int variant = intent.getIntExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT, BluetoothDevice.ERROR);
             FileLog.d(TAG + ": Pairing request received, variant=" + variant);
 
-            if (variant == BluetoothDevice.PAIRING_VARIANT_PIN) {
-                // Default MeshCore PIN is 123456; device PIN is in PACKET_DEVICE_INFO if different
-                device.setPin("123456".getBytes(StandardCharsets.UTF_8));
-                abortBroadcast();
-                FileLog.d(TAG + ": Auto-confirmed PIN pairing with default 123456");
+            if (variant == BluetoothDevice.PAIRING_VARIANT_PIN || variant == 1 /* PAIRING_VARIANT_PASSKEY */) {
+                // DO NOT auto-inject "123456" and abort broadcast.
+                // We must let the Android system show the native PIN entry dialog
+                // so the user can enter the dynamic PIN from the device screen.
+                FileLog.d(TAG + ": PIN/Passkey requested. Waiting for user input via system dialog.");
             } else if (variant == BluetoothDevice.PAIRING_VARIANT_PASSKEY_CONFIRMATION ||
                        variant == 3 /* PAIRING_VARIANT_CONSENT — hidden API, value = 3 */) {
                 device.setPairingConfirmation(true);
