@@ -199,6 +199,8 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     public boolean isSavedDialog;
     public boolean isSavedDialogCell;
     public DialogCellTags tags;
+    private boolean drawMeshIndicator;
+    private static Paint meshIndicatorPaint;
 
     public final StoriesUtilities.AvatarStoryParams storyParams = new StoriesUtilities.AvatarStoryParams(false) {
         @Override
@@ -1192,8 +1194,12 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             messageString = meshDialog.lastMessage != null ? meshDialog.lastMessage : "";
             drawTime = false;
             showChecks = false;
+            drawMeshIndicator = true;
         } else if (!isForumCell() && (isDialogCell || isTopic)) {
             printingString = MessagesController.getInstance(currentAccount).getPrintingString(currentDialogId, getTopicId(), true);
+            drawMeshIndicator = message != null && message.isMesh;
+        } else {
+            drawMeshIndicator = message != null && message.isMesh;
         }
         currentMessagePaint = Theme.dialogs_messagePaint[paintIndex];
         boolean checkMessage = true;
@@ -3923,6 +3929,33 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             if (drawNameLock) {
                 setDrawableBounds(Theme.dialogs_lockDrawable, nameLockLeft, nameLockTop);
                 Theme.dialogs_lockDrawable.draw(canvas);
+            }
+
+            if (drawMeshIndicator) {
+                if (meshIndicatorPaint == null) {
+                    meshIndicatorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    meshIndicatorPaint.setColor(0xFF39FF14); // Neon Green
+                    meshIndicatorPaint.setStrokeCap(Paint.Cap.ROUND);
+                }
+                int indicatorX = nameLeft - dp(18);
+                int indicatorY = dp(useForceThreeLines || SharedConfig.useThreeLinesLayout ? 13 : 17);
+                if ((!(useForceThreeLines || SharedConfig.useThreeLinesLayout) || isForumCell()) && hasTags()) {
+                    indicatorY -= dp(isForumCell() ? 8 : 9);
+                }
+                
+                canvas.save();
+                canvas.translate(indicatorX + dp(8), indicatorY + dp(8));
+                meshIndicatorPaint.setStyle(Paint.Style.STROKE);
+                meshIndicatorPaint.setStrokeWidth(dp(1.2f));
+                // Radio Tower Mast
+                canvas.drawLine(0, dp(2), 0, -dp(5), meshIndicatorPaint);
+                // Signal Arcs
+                meshIndicatorPaint.setStrokeWidth(dp(1.0f));
+                rect.set(-dp(3), -dp(7), dp(3), -dp(1));
+                canvas.drawArc(rect, -150, 120, false, meshIndicatorPaint);
+                rect.set(-dp(5), -dp(9), dp(5), dp(1));
+                canvas.drawArc(rect, -150, 120, false, meshIndicatorPaint);
+                canvas.restore();
             }
 
             int nameTop = dp(useForceThreeLines || SharedConfig.useThreeLinesLayout ? 10 : 14);

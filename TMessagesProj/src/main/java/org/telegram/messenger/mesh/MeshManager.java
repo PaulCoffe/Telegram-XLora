@@ -62,6 +62,8 @@ public class MeshManager {
     // NOTE: These are BLE-layer commands sent PLAINTEXT to the device firmware.
     private static final byte CMD_APP_START        = 0x01; // was 0x04 — FIX: must be 0x01 per spec
     private static final byte CMD_GET_MSG          = 0x0A; // Sync next queued message
+    private static final byte CMD_SET_DEVICE_TIME  = 0x06; // FIX: was 0x09 (AddUpdateContact)
+    private static final byte CMD_GET_CONTACTS     = 0x04; // FIX: was 0x02
     private static final byte CMD_GET_BATTERY      = 0x14; // Battery + storage
     // 2-byte commands (sent as full byte arrays, not using the byte constant directly):
     //   CMD_DEVICE_QUERY  = { 0x16, 0x03 }
@@ -189,8 +191,10 @@ public class MeshManager {
     }
 
     private MeshManager() {
-        // Listen for Android BLE pairing requests so we can auto-confirm with device PIN
-        IntentFilter f = new IntentFilter(BluetoothDevice.ACTION_PAIRING_REQUEST);
+        // Listen for pairing pulses and bond state changes
+        IntentFilter f = new IntentFilter();
+        f.addAction(BluetoothDevice.ACTION_PAIRING_REQUEST);
+        f.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
         ApplicationLoader.applicationContext.registerReceiver(pairingReceiver, f);
     }
 
@@ -201,28 +205,41 @@ public class MeshManager {
     private final BroadcastReceiver pairingReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (!BluetoothDevice.ACTION_PAIRING_REQUEST.equals(intent.getAction())) return;
+            String action = intent.getAction();
             BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
             if (device == null || !device.getAddress().equals(currentDeviceAddress)) return;
 
-            int variant = intent.getIntExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT, BluetoothDevice.ERROR);
-            FileLog.d(TAG + ": Pairing request received, variant=" + variant);
+            if (BluetoothDevice.ACTION_PAIRING_REQUEST.equals(action)) {
+                int variant = intent.getIntExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT, BluetoothDevice.ERROR);
 
-            if (variant == BluetoothDevice.PAIRING_VARIANT_PIN || variant == 1 /* PAIRING_VARIANT_PASSKEY */) {
-                // DO NOT auto-inject "123456" and abort broadcast.
-                // We must let the Android system show the native PIN entry dialog
-                // so the user can enter the dynamic PIN from the device screen.
-                FileLog.d(TAG + ": PIN/Passkey requested. Waiting for user input via system dialog.");
-            } else if (variant == BluetoothDevice.PAIRING_VARIANT_PASSKEY_CONFIRMATION ||
-                       variant == 3 /* PAIRING_VARIANT_CONSENT — hidden API, value = 3 */) {
-                device.setPairingConfirmation(true);
-                abortBroadcast();
-                FileLog.d(TAG + ": Auto-confirmed numeric comparison / consent pairing");
+                if (variant == BluetoothDevice.PAIRING_VARIANT_PIN || variant == 1 /* Passkey */) {
+                    FileLog.d(TAG + ": PIN/Passkey requested. User must interact with system dialog.");
+                } else if (variant == BluetoothDevice.PAIRING_VARIANT_PASSKEY_CONFIRMATION || variant == 3 /* Consent */) {
+                    device.setPairingConfirmation(true);
+                    abortBroadcast();
+                }
+                NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.didRequestMeshPairing, device, variant);
+
+            } else if (BluetoothDevice.ACTION_BOND_STATE_CHANGED.equals(action)) {
+                int bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR);
+                int prevBondState = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.ERROR);
+                FileLog.d(TAG + ": Bond state changed: " + prevBondState + " -> " + bondState);
+
+                if (bondState == BluetoothDevice.BOND_BONDED) {
+                    FileLog.d(TAG + ": Bonding successful. Proceeding with GATT connection...");
+                    // Retry connection now that we are bonded
+                    handler.postDelayed(() -> {
+                        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+                        if (adapter != null && currentDeviceAddress != null) {
+                            connectToDevice(adapter.getRemoteDevice(currentDeviceAddress));
+                        }
+                    }, 500);
+                } else if (bondState == BluetoothDevice.BOND_NONE && prevBondState == BluetoothDevice.BOND_BONDING) {
+                    FileLog.e(TAG + ": Bonding failed or canceled.");
+                    isConnecting = false;
+                    handler.post(() -> Toast.makeText(ApplicationLoader.applicationContext, "Ошибка сопряжения Bluetooth", Toast.LENGTH_SHORT).show());
+                }
             }
-
-            // Also notify the UI in case the user wants to enter a custom PIN
-            NotificationCenter.getGlobalInstance().postNotificationName(
-                    NotificationCenter.didRequestMeshPairing, device, variant);
         }
     };
 
@@ -379,7 +396,6 @@ public class MeshManager {
             }
             if (!exists) {
                 foundDevices.add(device);
-                FileLog.d(TAG + ": Found MeshCore candidate: " + name + " [" + device.getAddress() + "]");
                 handler.post(() -> { for (MeshManagerListener l : listeners) l.onDevicesUpdated(); });
             }
 
@@ -459,16 +475,29 @@ public class MeshManager {
         FileLog.d(TAG + ": Connecting to " + currentDeviceAddress + "...");
         handler.post(() -> { for (MeshManagerListener l : listeners) l.onConnectionStateChanged(false); });
         
-        // 1.4 Handle Sync hanging: 15-second handshake timeout
+        // 1.5 Handle Sync hanging: 45-second handshake timeout (accommodates bonding/PIN entry)
         handler.postDelayed(() -> {
             if (isConnecting || (isConnected && !isHandshakeComplete)) {
                 FileLog.e(TAG + ": Handshake timeout. Disconnecting ghost connection.");
                 stopAll();
                 handler.post(() -> Toast.makeText(ApplicationLoader.applicationContext, "Таймаут синхронизации. Проверьте пароль.", Toast.LENGTH_LONG).show());
             }
-        }, 15_000);
+        }, 45_000);
         
         try {
+            // Phase 7.6: If not bonded, we MUST bond first and wait for BOND_BONDED broadcast.
+            // Calling connectGatt while bonding is in progress often leads to GATT_ERROR 133.
+            int bondState = device.getBondState();
+            if (bondState == BluetoothDevice.BOND_NONE) {
+                FileLog.d(TAG + ": Device not bonded. Initiating bond and waiting...");
+                device.createBond();
+                return; // Wait for ACTION_BOND_STATE_CHANGED
+            } else if (bondState == BluetoothDevice.BOND_BONDING) {
+                FileLog.d(TAG + ": Bonding already in progress. Waiting...");
+                return;
+            }
+
+            FileLog.d(TAG + ": Bonded. Initiating GATT connection...");
             // autoConnect=false for reliable first-time connection
             bluetoothGatt = device.connectGatt(ApplicationLoader.applicationContext, false, gattCallback,
                     BluetoothDevice.TRANSPORT_LE);
@@ -552,7 +581,6 @@ public class MeshManager {
                 handler.post(() -> { for (MeshManagerListener l : listeners) l.onConnectionStateChanged(true); });
 
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                FileLog.d(TAG + ": GATT disconnected [status=" + status + "]");
                 isConnected = false;
                 isConnecting = false;
                 isHandshakeComplete = false;
@@ -607,13 +635,11 @@ public class MeshManager {
                 return;
             }
             // Step 2: Request MTU 512 before enabling notifications
-            FileLog.d(TAG + ": Services discovered, requesting MTU 512...");
             gatt.requestMtu(512);
         }
 
         @Override
         public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
-            FileLog.d(TAG + ": MTU negotiated to " + mtu + " [status=" + status + "]");
             // Step 3: Enable TX notifications via CCCD descriptor
             BluetoothGattService service = gatt.getService(UART_SERVICE_UUID);
             if (service != null) enableTxNotifications(gatt, service);
@@ -623,7 +649,6 @@ public class MeshManager {
         public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
             if (!CCCD_UUID.equals(descriptor.getUuid())) return;
             if (status == BluetoothGatt.GATT_SUCCESS) {
-                FileLog.d(TAG + ": TX notifications enabled. Starting handshake...");
                 // Step 4: Send CMD_APP_START — MUST be 8+ bytes: [0x01, 0x00 x7, app_name_UTF8]
                 handler.postDelayed(MeshManager.this::sendAppStart, 200);
             } else {
@@ -700,7 +725,7 @@ public class MeshManager {
     private void sendDeviceTime() {
         int ts = (int) (System.currentTimeMillis() / 1000L);
         byte[] packet = new byte[5];
-        packet[0] = 0x09;
+        packet[0] = CMD_SET_DEVICE_TIME; // 0x06
         packet[1] = (byte) (ts & 0xFF);
         packet[2] = (byte) ((ts >> 8) & 0xFF);
         packet[3] = (byte) ((ts >> 16) & 0xFF);
@@ -716,11 +741,9 @@ public class MeshManager {
      * Looking at the spec carefully: contacts returned by CMD_GET_CONTACTS
      */
     private void sendGetContacts() {
-        // CMD_GET_CONTACTS: per spec, the command byte for listing contacts.
-        // From companion_protocol.md table: PACKET_CONTACT_START=0x02, PACKET_CONTACT=0x03, PACKET_CONTACT_END=0x04
-        // The command to request contacts is byte 0x02 (triggers PACKET_CONTACT_START response)
-        FileLog.d(TAG + ": Sending CMD_GET_CONTACTS");
-        enqueueWrite(new byte[]{0x02});
+        // CMD_GET_CONTACTS: per spec, 0x04 triggers contact list dump
+        FileLog.d(TAG + ": Sending CMD_GET_CONTACTS (0x04)");
+        enqueueWrite(new byte[]{CMD_GET_CONTACTS});
     }
 
     /**
@@ -774,13 +797,11 @@ public class MeshManager {
                 break;
 
             case PACKET_CONTACT_START:
-                FileLog.d(TAG + ": Contact list start");
                 break;
             case PACKET_CONTACT:
                 parseContact(data);
                 break;
             case PACKET_CONTACT_END:
-                FileLog.d(TAG + ": Contact list complete. Fetching channels...");
                 channelSyncIndex = 0;
                 handler.postDelayed(() -> sendGetChannel(channelSyncIndex), 100);
                 break;
@@ -799,7 +820,6 @@ public class MeshManager {
             case PACKET_NO_MORE_MSGS:
                 if (!isHandshakeComplete) {
                     isHandshakeComplete = true;
-                    FileLog.d(TAG + ": Handshake complete. MeshCore node ready.");
                     handler.post(() -> {
                         for (MeshManagerListener l : listeners) l.onConnectionStateChanged(true);
                         Toast.makeText(ApplicationLoader.applicationContext,
@@ -815,7 +835,6 @@ public class MeshManager {
 
             case PACKET_MESSAGES_WAITING:
                 // Device has queued messages — poll them
-                FileLog.d(TAG + ": Messages waiting on device. Polling...");
                 handler.post(this::sendSyncNextMessage);
                 break;
 
@@ -847,7 +866,6 @@ public class MeshManager {
                 break;
 
             case PACKET_ADVERTISEMENT:
-                FileLog.d(TAG + ": Advertisement packet received (0x80)");
                 break;
 
             case PACKET_ACK:
@@ -1265,23 +1283,35 @@ public class MeshManager {
             FileLog.e(TAG + ": Invalid channel index: " + channelIndex);
             return;
         }
+
+        byte[] finalSecret = secret16;
+        String finalName = name;
+
+        // Hashtag derivation: if name starts with #, derive secret from name via SHA256
+        if (name != null && name.startsWith("#") && name.length() > 1) {
+            byte[] hash = org.telegram.messenger.Utilities.computeSHA256(name.getBytes(StandardCharsets.UTF_8));
+            finalSecret = new byte[16];
+            System.arraycopy(hash, 0, finalSecret, 0, 16);
+            FileLog.d(TAG + ": Derived hashtag channel secret for '" + name + "': " + bytesToHex(finalSecret));
+        }
+
         byte[] packet = new byte[50];
         packet[0] = 0x20;  // CMD_SET_CHANNEL
         packet[1] = (byte) (channelIndex & 0xFF);
 
         // Channel name: 32 bytes, null-padded
-        byte[] nameBytes = name.getBytes(StandardCharsets.UTF_8);
+        byte[] nameBytes = finalName.getBytes(StandardCharsets.UTF_8);
         int nameLen = Math.min(nameBytes.length, 32);
         System.arraycopy(nameBytes, 0, packet, 2, nameLen);
         // bytes 2+nameLen .. 33 remain 0x00 (null-padding)
 
         // Secret: 16 bytes
-        if (secret16 != null && secret16.length >= 16) {
-            System.arraycopy(secret16, 0, packet, 34, 16);
+        if (finalSecret != null && finalSecret.length >= 16) {
+            System.arraycopy(finalSecret, 0, packet, 34, 16);
         }
         // else all-zero = public channel
 
-        FileLog.d(TAG + ": Sending CMD_SET_CHANNEL slot=" + channelIndex + " name='" + name + "'");
+        FileLog.d(TAG + ": Sending CMD_SET_CHANNEL slot=" + channelIndex + " name='" + finalName + "'");
         enqueueWrite(packet);
     }
 

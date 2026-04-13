@@ -1498,6 +1498,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
     private Theme.MessageDrawable currentBackgroundSelectedDrawable;
     private int backgroundDrawableLeft;
     private int backgroundDrawableRight;
+
+    private static Paint meshBackgroundPaint;
+    private static Paint meshBorderPaint;
+    private static Paint meshTelemetryPaint;
     private int backgroundDrawableTop;
     private int backgroundDrawableBottom;
     private int viaWidth;
@@ -7547,6 +7551,9 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                     totalHeight = dp(22.5f);
                 } else {
                     totalHeight = messageObject.textHeight() + dp(19.5f) + namesOffset;
+                }
+                if (messageObject.isMesh) {
+                    totalHeight += dp(20);
                 }
 
                 if (!reactionsLayoutInBubble.isSmall) {
@@ -14101,6 +14108,13 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                         animatedEmojiStack.clearPositions();
                     }
                     drawMessageText(canvas);
+
+                    if (currentMessageObject.isMesh) {
+                        String telemetry = String.format("SNR: %d dB | HOPS: %d", currentMessageObject.snr, currentMessageObject.hops);
+                        float x = backgroundDrawableLeft + dp(12);
+                        float y = backgroundDrawableBottom - dp(8);
+                        canvas.drawText(telemetry, x, y, meshTelemetryPaint);
+                    }
                 }
             }
 
@@ -20123,6 +20137,52 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         if (!wasLayout || forcedLayout) {
             onLayout(false, getLeft(), getTop(), getRight(), getBottom());
         }
+
+        if (currentMessageObject != null && currentMessageObject.isMesh) {
+            if (meshBackgroundPaint == null) {
+                meshBackgroundPaint = new Paint();
+                meshBackgroundPaint.setColor(0xFF050505);
+                meshBackgroundPaint.setStyle(Paint.Style.FILL);
+
+                meshBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                meshBorderPaint.setColor(0xFF39FF14);
+                meshBorderPaint.setStyle(Paint.Style.STROKE);
+                meshBorderPaint.setStrokeWidth(dp(2));
+
+                meshTelemetryPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                meshTelemetryPaint.setColor(0xFF39FF14);
+                meshTelemetryPaint.setTextSize(dp(11));
+                meshTelemetryPaint.setTypeface(Typeface.MONOSPACE);
+            }
+
+            // Calculate rectangular bounds for Mesh message
+            int left = backgroundDrawableLeft;
+            int top = backgroundDrawableTop;
+            int right = backgroundDrawableRight + left;
+            int bottom = backgroundDrawableBottom;
+
+            rect.set(left, top, right, bottom);
+            canvas.drawRoundRect(rect, dp(4), dp(4), meshBackgroundPaint);
+            canvas.drawRoundRect(rect, dp(4), dp(4), meshBorderPaint);
+
+            // Draw "Technical" corners (small L-shapes)
+            float cornerLen = dp(8);
+            // Top Left
+            canvas.drawLine(left, top + cornerLen, left, top, meshBorderPaint);
+            canvas.drawLine(left, top, left + cornerLen, top, meshBorderPaint);
+            // Top Right
+            canvas.drawLine(right - cornerLen, top, right, top, meshBorderPaint);
+            canvas.drawLine(right, top, right, top + cornerLen, meshBorderPaint);
+            // Bottom Left
+            canvas.drawLine(left, bottom - cornerLen, left, bottom, meshBorderPaint);
+            canvas.drawLine(left, bottom, left + cornerLen, bottom, meshBorderPaint);
+            // Bottom Right
+            canvas.drawLine(right - cornerLen, bottom, right, bottom, meshBorderPaint);
+            canvas.drawLine(right, bottom, right, bottom - cornerLen, meshBorderPaint);
+
+            return;
+        }
+
         Drawable currentBackgroundShadowDrawable;
         int additionalTop = 0;
         int additionalBottom = 0;
@@ -23957,31 +24017,51 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         if (currentMessageObject != null && currentMessageObject.isMesh) {
             String statusText = "";
             if (drawTime) {
-                statusText = "Sending...";
+                statusText = "SENDING...";
             } else if (drawError) {
-                statusText = "Failed";
-            }
-            if (!statusText.isEmpty() && !currentMessageObject.isOutOwner()) {
-                int clockColor;
-                if (shouldDrawTimeOnMedia()) {
-                    clockColor = getThemedColor(Theme.key_chat_mediaSentClock);
-                } else {
-                    clockColor = getThemedColor(drawSelectionBackground ? Theme.key_chat_outSentClockSelected : Theme.key_chat_mediaSentClock);
+                statusText = "FAILED";
+            } else {
+                statusText = "MESH";
+                if (currentMessageObject.snr != 0 || currentMessageObject.hops != 0) {
+                    statusText += String.format(" [%s%ddB|H%d]", currentMessageObject.snr > 0 ? "+" : "", currentMessageObject.snr, currentMessageObject.hops);
                 }
-                Theme.chat_timePaint.setColor(clockColor);
-                Theme.chat_timePaint.setAlpha((int) (255 * alpha));
+            }
+
+            if (!statusText.isEmpty() && !currentMessageObject.isOutOwner()) {
+                if (meshTelemetryPaint == null) {
+                    meshTelemetryPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    meshTelemetryPaint.setColor(0xFF39FF14);
+                    meshTelemetryPaint.setTextSize(dp(9));
+                    meshTelemetryPaint.setTypeface(Typeface.MONOSPACE);
+                }
+                meshTelemetryPaint.setAlpha((int) (255 * alpha));
+                
                 float timeY;
                 if (shouldDrawTimeOnMedia()) {
                     timeY = getPhotoBottom() + additionalTimeOffsetY - dp(9.0f) + timeYOffset;
                 } else {
                     timeY = layoutHeight - dp(pinnedBottom || pinnedTop ? 9.5f : 8.5f) + timeYOffset;
-                    if (isRoundVideo) {
-                        timeY -= (dp(drawPinnedBottom ? 4 : 5) + reactionsLayoutInBubble.getCurrentTotalHeight(transitionParams.animateChangeProgress)) * (1f - getVideoTranscriptionProgress());
-                    }
                 }
                 float x = timeX + (currentMessageObject.scheduled ? 0 : dp(11));
-                canvas.drawText(statusText, x, timeY, Theme.chat_timePaint);
-                Theme.chat_timePaint.setAlpha(255);
+                
+                // --- NEW PREMIUM MESH ICON (Radio Tower) ---
+                canvas.save();
+                canvas.translate(x, timeY - dp(1));
+                meshTelemetryPaint.setStyle(Paint.Style.STROKE);
+                meshTelemetryPaint.setStrokeWidth(dp(1.2f));
+                // Vertical Mast
+                canvas.drawLine(0, 0, 0, -dp(7), meshTelemetryPaint);
+                // Signal Arcs
+                float arcR = dp(3);
+                rect.set(-arcR, -dp(10), arcR, -dp(4));
+                canvas.drawArc(rect, -150, 120, false, meshTelemetryPaint);
+                arcR = dp(5);
+                rect.set(-arcR, -dp(12), arcR, -dp(2));
+                canvas.drawArc(rect, -150, 120, false, meshTelemetryPaint);
+                canvas.restore();
+                
+                meshTelemetryPaint.setStyle(Paint.Style.FILL);
+                canvas.drawText(statusText, x + dp(8), timeY, meshTelemetryPaint);
                 invalidate();
                 return;
             }
@@ -24331,38 +24411,58 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         if (currentMessageObject != null && currentMessageObject.isMesh) {
             String statusText = "";
             if (drawClock) {
-                statusText = "Sending...";
+                statusText = "SENDING...";
             } else if (drawCheck2) {
-                statusText = "Delivered";
+                statusText = "MESH|DELIV";
             } else if (drawCheck1) {
-                statusText = "Sent";
+                statusText = "MESH|SENT";
             } else if (drawError) {
-                statusText = "Failed...";
+                statusText = "MESH|FAIL";
+            } else {
+                statusText = "MESH";
             }
+            
+            if (currentMessageObject.snr != 0 || currentMessageObject.hops != 0) {
+                statusText += String.format(" [%s%ddB|H%d]", currentMessageObject.snr > 0 ? "+" : "", currentMessageObject.snr, currentMessageObject.hops);
+            }
+
             if (!statusText.isEmpty()) {
-                if (shouldDrawTimeOnMedia()) {
-                    if (currentMessageObject.shouldDrawWithoutBackground()) {
-                        Theme.chat_timePaint.setColor(getThemedColor(Theme.key_chat_serviceText));
-                        Theme.chat_timePaint.setAlpha((int) (255 * timeAlpha * alpha));
-                    } else {
-                        Theme.chat_timePaint.setColor(getThemedColor(Theme.key_chat_mediaSentClock));
-                        Theme.chat_timePaint.setAlpha((int) (255 * alpha));
-                    }
-                } else {
-                    Theme.chat_timePaint.setColor(getThemedColor(drawSelectionBackground ? Theme.key_chat_outSentClockSelected : Theme.key_chat_outSentClock));
-                    Theme.chat_timePaint.setAlpha((int) (255 * alpha));
+                if (meshTelemetryPaint == null) {
+                    meshTelemetryPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    meshTelemetryPaint.setColor(0xFF39FF14);
+                    meshTelemetryPaint.setTextSize(dp(9));
+                    meshTelemetryPaint.setTypeface(Typeface.MONOSPACE);
                 }
-                float tw = Theme.chat_timePaint.measureText(statusText);
+                meshTelemetryPaint.setAlpha((int) (255 * alpha));
+
+                float tw = meshTelemetryPaint.measureText(statusText);
                 float tx;
                 if (shouldDrawTimeOnMedia()) {
-                    tx = layoutWidth - dp(bigRadius ? 24 : 22) - tw + offsetX;
+                    tx = layoutWidth - dp(bigRadius ? 24 : 22) - tw + offsetX - dp(10);
                     timeY += timeYOffset;
                 } else {
-                    tx = layoutWidth - dp(18.5f) - tw + offsetX;
+                    tx = layoutWidth - dp(18.5f) - tw + offsetX - dp(10);
                     timeY = layoutHeight - dp(8.5f) + timeYOffset;
                 }
-                canvas.drawText(statusText, tx, timeY, Theme.chat_timePaint);
-                Theme.chat_timePaint.setAlpha(255);
+
+                // --- NEW PREMIUM MESH ICON (Radio Tower) ---
+                canvas.save();
+                canvas.translate(tx - dp(6), timeY - dp(1));
+                meshTelemetryPaint.setStyle(Paint.Style.STROKE);
+                meshTelemetryPaint.setStrokeWidth(dp(1.2f));
+                // Vertical Mast
+                canvas.drawLine(0, 0, 0, -dp(7), meshTelemetryPaint);
+                // Signal Arcs
+                float arcR = dp(3);
+                rect.set(-arcR, -dp(10), arcR, -dp(4));
+                canvas.drawArc(rect, -150, 120, false, meshTelemetryPaint);
+                arcR = dp(5);
+                rect.set(-arcR, -dp(12), arcR, -dp(2));
+                canvas.drawArc(rect, -150, 120, false, meshTelemetryPaint);
+                canvas.restore();
+
+                meshTelemetryPaint.setStyle(Paint.Style.FILL);
+                canvas.drawText(statusText, tx, timeY, meshTelemetryPaint);
                 invalidate();
                 return;
             }
