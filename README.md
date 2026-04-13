@@ -1,47 +1,90 @@
 # 🛰 Telegram-XLora
 
-**Telegram-XLora** — это мощный пользовательский клиент Telegram для Android, объединяющий надежность официального приложения с уникальными возможностями связи через LoRa-сети (MeshCore). Этот проект создан для обеспечения приватности и автономности связи даже в условиях полного отсутствия интернета.
+**Telegram-XLora** — это инновационный кросс-платформенный клиент Telegram для Android, построенный на базе форка **Forkgram** и глубоко интегрированный с протоколом **MeshCore LoRa**. 
+
+Проект превращает обычный мессенджер в мощный инструмент автономной связи, позволяя обмениваться сообщениями через децентрализованные радиосети в условиях отсутствия сотовой связи, интернета или при необходимости полной радиомолчания.
 
 ---
 
-## 🇷🇺 Описание проекта (Russian)
+## 🇷🇺 Полный функционал приложения (Russian)
 
-### Обзор
-Telegram-XLora базируется на стабильном форке **Forkgram**, дополняя его полноценным стеком протоколов **LoRa Mesh**. Проект позволяет использовать Android-смартфон в качестве терминала для общения в децентрализованных сетях MeshCore через Bluetooth-подключение к LoRa-модулям.
+### 1. 🌐 MeshCore LoRa (Новое)
+Telegram-XLora расширяет границы общения, добавляя поддержку LoRa-модулей (LilyGO T-Echo, Heltec T114 и др.) по Bluetooth.
 
-### Ключевые особенности Mesh-связи:
-- **Автономность**: Отправка и получение сообщений через LoRa-радиоканал, когда мобильная сеть или Wi-Fi недоступны.
-*   **Интеграция в интерфейс**: Выделенная папка (вкладка) **Mesh** в списке чатов для быстрого доступа к оффлайн-диалогам.
-*   **MeshCore Protocol**: Полная поддержка протокола MeshCore для передачи текстовых сообщений.
-*   **BLE Сканирование**: Быстрый поиск и подключение к MeshCore-устройствам через Bluetooth с контролем прав доступа и состояния GPS.
+*   **Автономная связь (Mesh-сети)**:
+    *   Отправка и получение текстовых сообщений полностью без интернета.
+    *   Работа в режиме Mesh: сообщения ретранслируются другими узлами, расширяя дальность покрытия.
+    *   **Поддержка 8 каналов**: 8 независимых слотов для каналов (публичные — слот 0, и приватные с ключами шифрования).
+    *   **Direct Messages (DMs)**: Личные сообщения напрямую конкретному пользователю по его уникальному публичному ключу (PubKey).
 
-### Настройка радио (LoRa):
-Приложение предоставляет полный контроль над аппаратными параметрами LoRa-модуля:
-- **Частота**: Ручной ввод или использование пресетов.
-- **Полоса пропускания (BW)**: От 7.8 кГц до 500 кГц.
-- **Коэффициент расширения (SF)**: Настройка от SF7 до SF12.
-- **Кодирование (CR)**: Выбор параметров коррекции ошибок.
-- **Пресет «Москва»**: Быстрая настройка на оптимальные параметры для московского региона (**868.731 МГц**, 62.5 кГц, SF7, CR 4/7).
+*   **Гибридный режим (Hybrid Messaging)**:
+    *   **Привязка к контакту**: Вы можете привязать узел LoRa (PubKey) к существующему пользователю Telegram.
+    *   **Единый чат**: Сообщения, пришедшие через радиоканал от привязанного контакта, отображаются прямо в его стандартном чате Telegram с пометкой `📡 LoRa`.
+    *   **Оффлайн-очередь**: Если интернет появится, переписка останется доступной локально.
 
-### Дополнительные возможности (база Forkgram):
-- Удаление сообщений у всех участников по умолчанию.
-- Отсутствие «плавающей» кнопки карандаша для чистоты интерфейса.
-- Отображение оригинальной даты пересланных сообщений.
-- Скрытая строка «Подключение к прокси...».
-- Безлимитные закрепленные чаты (Pinned chats).
-- Тонкая настройка приватности (скрытие аватаров, имен и т.д.).
+*   **Интерфейс и UI/UX**:
+    *   **Папка Mesh**: Автоматически создаваемая вкладка в списке чатов, где собраны все ваши радио-диалоги.
+    *   **Телеметрия в чате**: Каждое Mesh-сообщение отображает данные о качестве связи: количество прыжков (`Hops`) и уровень шума (`SNR`).
+    *   **Статусы доставки**: Визуальная индикация «Отправка...», «Доставлено» и «Ошибка» для радио-сообщений.
+
+*   **Управление оборудованием**:
+    *   **Поиск (BLE Scanner)**: Умный поиск MeshCore-устройств с фильтрацией по ключевым словам.
+    *   **Авто-подключение**: Приложение запоминает ваше устройство и автоматически восстанавливает соединение при запуске, не разряжая батарею лишним сканированием.
+    *   **Настройка радио**: Полный контроль над параметрами:
+        *   Частота (с поддержкой пресетов для городов РФ: Москва, Липецк, Бийск и др.).
+        *   Bandwidth (BW), Spreading Factor (SF), Coding Rate (CR).
+        *   Мониторинг заряда аккумулятора и памяти внешнего модуля.
+
+### 2. ⚡ Улучшения Forkgram (База)
+Telegram-XLora наследует лучшие функции Forkgram, делая использование Telegram более продуктивным и приватным.
+
+*   **Приватность и безопасность**:
+    *   **Удаление у всех по умолчанию**: При удалении сообщения галочка «Удалить у [имя]» включена автоматически.
+    *   **Секретные функции**: Скрытие статуса «Подключение к прокси...» для чистого интерфейса.
+    *   **Оригинальные даты**: При пересылке сообщений отображается реальное время их создания.
+    *   **Скрытие аватаров и имен**: Расширенные настройки конфиденциальности в списке чатов.
+
+*   **Продуктивность интерфейса**:
+    *   **Безлимитные закрепленные чаты**: Закрепляйте столько диалогов, сколько вам нужно (в стандартном клиенте лимит — 5).
+    *   **Чистый экран**: Удалена плавающая кнопка карандаша (FAB), освобождая место для контента.
+    *   **Вкладки и категории**: Удобная навигация по папкам в нижней или верхней части экрана.
+    *   **Улучшенный выбор медиа**: Быстрый доступ к галерее и файлам.
 
 ---
 
-## 🇺🇸 Project Overview (English)
+## 🇺🇸 Full Project Overview (English)
 
-**Telegram-XLora** is a high-performance custom Telegram client for Android that merges the reliability of the official app with unique LoRa Mesh (MeshCore) communication capabilities. Built for privacy and resilience, it ensures you stay connected even when the internet is down.
+**Telegram-XLora** is an advanced custom Telegram client for Android. It combines the productivity of the **Forkgram** fork with deep **MeshCore LoRa** integration, allowing for resilient communication without internet.
 
-### Key Features:
-- **LoRa Mesh Connectivity**: Seamlessly swap between Telegram servers and LoRa radio channels for messaging in offline environments.
-- **Native UI Integration**: A dedicated **Mesh** folder/tab for managing hardware-based dialogues directly in your chat list.
-- **MeshCore Protocol**: Full implementation of the MeshCore protocol for binary and text data transmission.
-- **Advanced BLE Management**: Robust Bluetooth scanning and connection stability for MeshCore hardware modules.
+### 1. 🌐 MeshCore LoRa Features
+*   **Offline Connectivity**: Send and receive texts via LoRa radio modules (LilyGO, Heltec) over BLE.
+*   **8-Slot Channel Management**: Support for public (Slot 0) and private encrypted channels.
+*   **P2P Direct Messages**: Secure messaging to specific nodes using Public Key addressing.
+*   **Hybrid Chat**: Link LoRa nodes to Telegram contacts. Messages received via radio appear in standard Telegram chats with a `📡 LoRa` prefix.
+*   **Telemetry & Status**: See real-time message stats like Hops and SNR. Visual delivery indicators for all radio traffic.
+*   **Hardware Control**: Fine-tune Spreading Factor, Bandwidth, and Frequency. Includes built-in regional presets.
+
+### 2. ⚡ Forkgram Enhancements
+*   **Enhanced Privacy**: "Delete for everyone" by default; original timestamps on forwarded messages; stealth proxy status.
+*   **UI Productivity**: Unlimited pinned chats; removed floating action button for a cleaner UI; custom drawer and tab management.
+*   **Core Improvements**: Faster media loading and advanced privacy settings inherited from the Forkgram core.
+
+---
+
+## 🛠 Технические требования / Technical Info
+
+*   **Оборудование**: Модули LoRa (nRF52840, ESP32) с прошивкой **MeshCore** (v1.12.0+).
+*   **Сборка**:
+    *   Android SDK 35 (Target).
+    *   NDK r23c (для нативных библиотек).
+    *   Gradle 8.0+.
+*   **Лицензия**: GNU GPL v2.
+
+---
+
+> [!IMPORTANT]
+> Это программное обеспечение предоставляется «как есть». Для использования функций LoRa необходимо физическое устройство-трансивер, подключенное по Bluetooth.
+luetooth scanning and connection stability for MeshCore hardware modules.
 
 ### Radio & Hardware Configuration:
 Take full control over your LoRa hardware with integrated configuration tools:
