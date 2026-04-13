@@ -1285,6 +1285,17 @@ public class MeshManager {
         enqueueWrite(packet);
     }
 
+    public void sendSetOwnerInfo(String name) {
+        if (!isHandshakeComplete) return;
+        byte[] nameBytes = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        int len = Math.min(nameBytes.length, 32);
+        byte[] packet = new byte[1 + 32];
+        packet[0] = 0x0F; // CMD_SET_OWNER_INFO
+        System.arraycopy(nameBytes, 0, packet, 1, len);
+        FileLog.d(TAG + ": Sending CMD_SET_OWNER_INFO name='" + name + "'");
+        enqueueWrite(packet);
+    }
+
     /** Legacy sendData compat shim — routes to channel 0 */
     public void sendData(byte[] data) {
         sendChannelMessage(0, new String(data, StandardCharsets.UTF_8));

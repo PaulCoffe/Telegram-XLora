@@ -8,11 +8,12 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
-import androidx.appcompat.app.AlertDialog;
-
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.mesh.MeshManager;
 import org.telegram.messenger.mesh.MeshTransportManager;
 import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.LayoutHelper;
@@ -20,6 +21,7 @@ import org.telegram.ui.Components.UniversalAdapter;
 import org.telegram.ui.Components.UniversalRecyclerView;
 import org.telegram.ui.Components.UItem;
 
+import org.telegram.messenger.Utilities;
 import java.util.ArrayList;
 
 public class MeshRadioSettingsActivity extends BaseFragment {
@@ -121,34 +123,42 @@ public class MeshRadioSettingsActivity extends BaseFragment {
         }
     }
 
-    private void showInput(String title, String defValue, java.util.function.Consumer<String> onOk) {
+    private void showInput(String title, String defValue, Utilities.Callback<String> onOk) {
         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
         builder.setTitle(title);
         final EditText input = new EditText(getParentActivity());
         input.setInputType(InputType.TYPE_CLASS_TEXT);
         input.setText(defValue);
-        LinearLayout lp = new LinearLayout(getParentActivity());
-        lp.setOrientation(LinearLayout.VERTICAL);
+        input.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+        
+        FrameLayout container = new FrameLayout(getParentActivity());
         int pad = AndroidUtilities.dp(20);
-        lp.setPadding(pad, pad, pad, pad);
-        lp.addView(input);
-        builder.setView(lp);
-        builder.setPositiveButton("OK", (dialog, which) -> onOk.accept(input.getText().toString()));
-        builder.setNegativeButton("Отмена", (dialog, which) -> dialog.cancel());
-        builder.show();
+        container.addView(input, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 20, 10, 20, 10));
+        builder.setView(container);
+        
+        builder.setPositiveButton("OK", (dialog, which) -> onOk.run(input.getText().toString()));
+        builder.setNegativeButton("Отмена", null);
+        showDialog(builder.create());
     }
 
     private void showPresetSelector() {
-        ArrayList<String> names = MeshTransportManager.getInstance().getAvailablePresets();
+        java.util.List<MeshTransportManager.MeshPreset> presets = MeshTransportManager.getInstance().getPresets();
+        CharSequence[] names = new CharSequence[presets.size()];
+        for (int i = 0; i < presets.size(); i++) {
+            names[i] = presets.get(i).name + (presets.get(i).isSystem ? " ✔" : "");
+        }
+        
         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
         builder.setTitle("Выберите пресет");
-        String[] arr = names.toArray(new String[0]);
-        builder.setItems(arr, (dialog, which) -> {
-            MeshTransportManager.getInstance().applyPreset(arr[which]);
-            toast("Применён пресет: " + arr[which]);
-            refreshList();
+        builder.setItems(names, (dialog, which) -> {
+            if (which >= 0 && which < presets.size()) {
+                MeshTransportManager.MeshPreset p = presets.get(which);
+                MeshTransportManager.getInstance().setRadioConfig(p.frequency, p.bandwidth, p.spreadingFactor, p.codingRate);
+                toast("Применён пресет: " + p.name);
+                refreshList();
+            }
         });
-        builder.show();
+        showDialog(builder.create());
     }
 
     private void refreshList() {
