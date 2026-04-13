@@ -255,6 +255,7 @@ public class MessageObject {
     public boolean isMesh;
     public int hops;
     public int snr;
+    public int meshStatus;
 
     public boolean isSpoilersRevealed;
     public boolean isMediaSpoilersRevealed;

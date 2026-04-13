@@ -7459,6 +7459,28 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         if (!StarsController.getInstance(currentAccount).beforeSendingFinalRequest(req, msgObj, () -> performSendMessageRequest(req, msgObj, originalPath, parentMessage, check, delayedMessage, parentObject, params, scheduled))) {
             return;
         }
+        if (newMsgObj.dialog_id < -2000000000L) {
+            if (!org.telegram.messenger.mesh.MeshManager.getInstance().isConnected()) {
+                AndroidUtilities.runOnUIThread(() -> {
+                    org.telegram.ui.Components.BulletinFactory.of(org.telegram.ui.LaunchActivity.getLastFragment()).createSimpleBulletin(org.telegram.messenger.R.raw.contact_check, "Mesh device disconnected. Message queued.").show();
+                });
+            }
+            if (req instanceof TLRPC.TL_messages_sendMessage) {
+                TLRPC.TL_messages_sendMessage r = (TLRPC.TL_messages_sendMessage) req;
+                org.telegram.messenger.mesh.MeshManager.getInstance().sendChannelMessage(0, r.message);
+                
+                // Advance UI state to "Sent to LoRa" (one checkmark)
+                final int oldId = newMsgObj.id;
+                AndroidUtilities.runOnUIThread(() -> {
+                    newMsgObj.send_state = org.telegram.messenger.MessageObject.MESSAGE_SEND_STATE_SENT;
+                    getNotificationCenter().postNotificationName(org.telegram.messenger.NotificationCenter.messageReceivedByServer, oldId, newMsgObj.id, msgObj, newMsgObj.dialog_id, 0L, 0, scheduled);
+                    processSentMessage(oldId);
+                    removeFromSendingMessages(oldId, scheduled);
+                });
+            }
+            return;
+        }
+
         if (!BotForumHelper.getInstance(currentAccount).beforeSendingFinalRequest(req, msgObj, () -> performSendMessageRequest(req, msgObj, originalPath, parentMessage, check, delayedMessage, parentObject, params, scheduled))) {
             return;
         }

@@ -15,6 +15,8 @@ public class MeshDialog extends TLRPC.TL_dialog {
     // For routing
     public int channelSlot = -1;
     public String pubKeyHex;
+    public float snr;
+    public int hops;
 
     public MeshDialog() {
         this.isMesh = true;

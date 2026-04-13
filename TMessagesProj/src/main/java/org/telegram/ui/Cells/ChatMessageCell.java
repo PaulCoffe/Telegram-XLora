@@ -18335,11 +18335,11 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 currentTimeString = TextUtils.concat(formatString(R.string.MessageScheduledRepeatSeconds, period), ", ", currentTimeString);
             }
         }
-        timeTextWidth = timeWidth = (int) Math.ceil(Theme.chat_timePaint.measureText(currentTimeString, 0, currentTimeString == null ? 0 : currentTimeString.length()));
         if (currentMessageObject != null && currentMessageObject.isMesh) {
-            String meshMetadata = String.format("Mesh Route H%d S%d", currentMessageObject.hops, currentMessageObject.snr);
-            timeWidth += dp(14) + (int) Math.ceil(Theme.chat_timePaint.measureText(meshMetadata));
+            String meshMetadata = String.format(" | Mesh H%d", currentMessageObject.hops);
+            currentTimeString = TextUtils.concat(currentTimeString, meshMetadata);
         }
+        timeTextWidth = timeWidth = (int) Math.ceil(Theme.chat_timePaint.measureText(currentTimeString, 0, currentTimeString == null ? 0 : currentTimeString.length()));
         if (currentMessageObject.scheduled && currentMessageObject.messageOwner.date == 0x7FFFFFFE || currentMessageObject.notime) {
             timeWidth -= dp(8);
         }
@@ -28604,15 +28604,33 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                     drawCheck2 = false;
                     drawClock = false;
                     drawError = true;
-                } else if (currentMessageObject.isSent()) {
-                    if (!currentMessageObject.scheduled && !currentMessageObject.isUnread()) {
-                        drawCheck1 = true;
+                } else if (currentMessageObject.isSent() || currentMessageObject.isMesh) {
+                    if (currentMessageObject.isMesh) {
+                        // 0=Pending, 1=Sent to LoRa, 2=Delivered
+                        if (currentMessageObject.meshStatus == 0) {
+                            drawCheck1 = false;
+                            drawCheck2 = false;
+                            drawClock = true;
+                        } else if (currentMessageObject.meshStatus == 1) {
+                            drawCheck1 = true;
+                            drawCheck2 = false;
+                            drawClock = false;
+                        } else {
+                            drawCheck1 = true;
+                            drawCheck2 = true;
+                            drawClock = false;
+                        }
+                        drawError = false;
                     } else {
-                        drawCheck1 = false;
+                        if (!currentMessageObject.scheduled && !currentMessageObject.isUnread()) {
+                            drawCheck1 = true;
+                        } else {
+                            drawCheck1 = false;
+                        }
+                        drawCheck2 = true;
+                        drawClock = false;
+                        drawError = false;
                     }
-                    drawCheck2 = true;
-                    drawClock = false;
-                    drawError = false;
                 }
                 if (currentMessageObject.notime || currentMessageObject.isQuickReply()) {
                     drawCheck1 = false;

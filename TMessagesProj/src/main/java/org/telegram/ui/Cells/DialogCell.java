@@ -1191,7 +1191,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
 
         if (meshDialog != null) {
             nameString = meshDialog.meshName;
-            messageString = meshDialog.lastMessage != null ? meshDialog.lastMessage : "";
+            String time = LocaleController.stringForMessageListDate(meshDialog.last_message_date);
+            String path = meshDialog.hops > 0 ? meshDialog.hops + " hops" : "Direct";
+            messageString = String.format("SNR: %.1fdB | %s | Path: %s", meshDialog.snr, time, path);
             drawTime = false;
             showChecks = false;
             drawMeshIndicator = true;

@@ -1,4 +1,23 @@
-# DEVELOPMENT HISTORY
+---
+
+## [2026-04-13] Phase 12: High-Fidelity UI & Message Lifecycle Completion (mesh-dev)
+
+### Objective
+Finalize the Mesh integration by bridging LoRa message history into the standard Telegram UI components and implementing a robust 3-stage delivery lifecycle.
+
+### Changes
+1. **Message Lifecycle & Status**:
+   - Implemented 3-stage status mapping (Pending/Sent/Delivered) in `ChatMessageCell.java` using standard clock and checkmark icons.
+   - Developed deterministic ACK token matching in `MeshManager.java` (token = [CMD][0x00][Slot][TS_Low]).
+   - Added `cleanupPendingMessages` in `MeshStorage.java` to automatically mark timed-out messages as "Failed".
+2. **UI Telemetry & Aesthetics**:
+   - **DialogCell**: Integrated orange telemetry line (SNR/Hops) and added a "Plus" icon to the Mesh folder for node management.
+   - **ChatMessageCell**: Appends real-time hop count telemetry (`Mesh H{n}`) to the message timestamp footer.
+3. **Routing & Interception**:
+   - **MessagesController**: Intercepted `loadMessagesInternal()` to redirect history loading for synthetic dialog IDs (< -2B) to `MeshStorage`.
+   - **SendMessagesHelper**: Intercepted sending flow to handle Mesh-specific routing and added a `Bulletin` UI warning for disconnected BLE devices.
+
+---
 
 ## [2026-04-13] Phase 11: Final Stabilization & UI Overhaul (mesh-dev)
 

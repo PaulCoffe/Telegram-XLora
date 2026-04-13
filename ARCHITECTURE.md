@@ -1,6 +1,6 @@
 # Telegram-XLora Architecture & MeshCore Integration
 
-> Last updated: 2026-04-13 — Protocol alignment v1.12.0+ | Final Stabilization v8
+> Last updated: 2026-04-13 — Protocol alignment v1.12.0+ | Final Stabilization v9 (UI & Lifecycle)
 
 ## 1. Overview
 Telegram-XLora is a custom Android client based on Forkgram that integrates **MeshCore LoRa** networking via Bluetooth LE. Users can communicate without internet using BLE-connected LoRa hardware (Heltec T114, LilyGO, etc.).
@@ -84,15 +84,20 @@ CREATE TABLE nodes (
     last_hops INTEGER
 );
 
--- Message history (channel + DM)
+-- Message history (chat history for channel + DM)
 CREATE TABLE messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     dialog_id INTEGER,          -- synthetic negative long
     sender_pubkey TEXT,         -- pubkey prefix (empty = outgoing)
     text TEXT,
     date INTEGER,               -- Unix seconds
-    is_out INTEGER DEFAULT 0
+    is_out INTEGER DEFAULT 0,
+    mesh_msg_id INTEGER DEFAULT 0, -- deterministic token/random_id for ACK matching
+    status INTEGER DEFAULT 0,      -- 0=Pending, 1=Sent to LoRa, 2=Delivered, 3=Failed
+    snr REAL DEFAULT 0,            -- telemetry collected on arrival
+    hops INTEGER DEFAULT 0         -- telemetry collected on arrival
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_dedup ON messages(dialog_id, mesh_msg_id) WHERE mesh_msg_id != 0;
 
 -- LoRa channel slots (per MeshCore spec, slots 0-7)
 CREATE TABLE lora_channels (
@@ -154,10 +159,25 @@ CREATE TABLE device_pins (
 
 ---
 
-## 5. Hybrid Chat Logic (Phase 2 — Planned)
-- **Identity Linking**: Users link a Mesh pubkey to a Telegram User ID via `MeshStorage.linkNodeToUser()`
-- **Metadata Persistence**: Mesh-specific data (hops, SNR) will be embedded in `TLRPC.Message.custom_params` using magic `0x4D455348` ("MESH")
-- **UI Rendering**: `ChatMessageCell` detects magic header and renders technical aesthetic (Neon Green, corner markers) + "via Mesh" indicator + hop count & SNR telemetry footer.
+## 5. Hybrid Chat Logic & UI Integration
+
+### 5.1 Synthetic ID Routing
+The `MessagesController` intercepts `loadMessagesInternal()` for dialog IDs < -2,000,000,000. It redirects history fetching to `MeshStorage.getMessages()`, wrapping the results into standard `MessageObject` instances with `isMesh = true`. This allows Mesh chats to coexist seamlessly with Telegram chats.
+
+### 5.2 Message Delivery Lifecycle (3 Stages)
+We map the `status` column from `MeshStorage` to standard Telegram status icons in `ChatMessageCell.createStatusDrawableParams()`:
+- **0 (Pending)**: Renders the **Clock** icon. Message is waiting for BLE connection or queue flush.
+- **1 (Sent to LoRa)**: Renders a **Single Check**. The LoRa device has accepted the packet for radio transmission.
+- **2 (Delivered)**: Renders **Double Checks**. A delivery ACK was received from the mesh network.
+- **3 (Failed)**: Red exclamation/error state.
+
+### 5.3 Deterministic ACK Matching
+To match hardware ACKs to database records, `MeshManager` generates a 4-byte token derived from the command packet (e.g., `[CMD] [0x00] [Slot] [TS_Low]`). This token is stored as `mesh_msg_id` and matched against the `PACKET_ACK` payload (echo of the first 4 bytes of the command).
+
+### 5.4 UI Telemetry
+- **DialogCell**: Renders an orange telemetry line below the last message (SNR: {x} | Path: {y} hops).
+- **ChatMessageCell**: Appends ` | Mesh H{n}` to the timestamp footer in chat bubbles.
+- **Error Handling**: `SendMessagesHelper` shows a `Bulletin` notification if sending is attempted while the BLE device is disconnected, confirming the message is queued.
 
 ---
 
@@ -201,6 +221,7 @@ CREATE TABLE device_pins (
 | 2026-04-10 | **v6** | **Protocol alignment phase 2**: CMD_SET_RADIO_PARAMS(0x0B), CMD_SEND_TXT_MSG(0x02) packet mapping, and BLE Passkey Entry native UI fixes. |
 | 2026-04-10 | **v7** | **Connection Hardening & DM Routing**: Transitioned to direct-connect peer mapping, bypass auto-scan, restricted allowed BLE device names, and replaced channel 0 stub with true sendContactMessage logic. |
 | 2026-04-13 | **v8** | **Final Stabilization**: Implemented BOND_STATE_CHANGED handshake to fix GATT_ERROR 133, added UI telemetry (SNR/Hops) in chat bubbles, and performed final log pruning. |
+| 2026-04-13 | **v9** | **UI & Lifecycle Completion**: Implemented 3-stage delivery status (Pending/Sent/Delivered), synthetic history interception in `MessagesController`, deterministic ACK tokens, and network-unreachable error UI. |
 
 ---
 

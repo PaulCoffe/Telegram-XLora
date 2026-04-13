@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MeshStorage extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "mesh_data.db";
-    private static final int DATABASE_VERSION = 4;
+    private static final int DATABASE_VERSION = 5;
 
     // MeshCore official public channel key (slot 0)
     public static final String PUBLIC_CHANNEL_KEY_HEX = "8b3387e9c5cdea6ac9e5edbaa115cd72";
@@ -99,7 +99,10 @@ public class MeshStorage extends SQLiteOpenHelper {
                 "text TEXT, " +
                 "date INTEGER, " +
                 "is_out INTEGER DEFAULT 0, " +
-                "mesh_msg_id INTEGER DEFAULT 0" +  // random_id from MeshCore packet (for dedup)
+                "mesh_msg_id INTEGER DEFAULT 0, " + // random_id from MeshCore packet (for dedup)
+                "status INTEGER DEFAULT 0, " +      // 0=Pending, 1=Sent, 2=Delivered, 3=Failed
+                "snr REAL DEFAULT 0, " +
+                "hops INTEGER DEFAULT 0" +
                 ");");
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_dedup " +
                 "ON messages(dialog_id, mesh_msg_id) WHERE mesh_msg_id != 0");
@@ -154,15 +157,11 @@ public class MeshStorage extends SQLiteOpenHelper {
             pub.put("is_public", 1);
             db.insertWithOnConflict("lora_channels", null, pub, SQLiteDatabase.CONFLICT_IGNORE);
         }
-        if (oldVersion < 4) {
-            // Add deduplication: mesh_msg_id column + unique index
-            try {
-                db.execSQL("ALTER TABLE messages ADD COLUMN mesh_msg_id INTEGER DEFAULT 0");
-            } catch (Exception ignored) {} // column may already exist if upgrading from freshly created v3
-            try {
-                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_msg_dedup " +
-                        "ON messages(dialog_id, mesh_msg_id) WHERE mesh_msg_id != 0");
-            } catch (Exception ignored) {}
+        if (oldVersion < 5) {
+            // Add status, snr, hops columns
+            try { db.execSQL("ALTER TABLE messages ADD COLUMN status INTEGER DEFAULT 0"); } catch (Exception ignored) {}
+            try { db.execSQL("ALTER TABLE messages ADD COLUMN snr REAL DEFAULT 0"); } catch (Exception ignored) {}
+            try { db.execSQL("ALTER TABLE messages ADD COLUMN hops INTEGER DEFAULT 0"); } catch (Exception ignored) {}
         }
     }
 
@@ -428,6 +427,11 @@ public class MeshStorage extends SQLiteOpenHelper {
      */
     private void persistMessage(long dialogId, String senderPubkey, String text,
                                 boolean isOut, long meshMsgId) {
+        persistMessage(dialogId, senderPubkey, text, isOut, meshMsgId, isOut ? 0 : 1, 0, 0); // Outgoing starts at 0 (Pending), Incoming starts at 1 (Sent)
+    }
+
+    public void persistMessage(long dialogId, String senderPubkey, String text,
+                                boolean isOut, long meshMsgId, int status, float snr, int hops) {
         storageQueue.postRunnable(() -> {
             try {
                 SQLiteDatabase db = getWritableDatabase();
@@ -442,6 +446,9 @@ public class MeshStorage extends SQLiteOpenHelper {
                     v.put("date",          nowSec);
                     v.put("is_out",        isOut ? 1 : 0);
                     v.put("mesh_msg_id",   meshMsgId);
+                    v.put("status",        status);
+                    v.put("snr",           snr);
+                    v.put("hops",          hops);
                     long rowId = db.insertWithOnConflict("messages", null, v,
                             SQLiteDatabase.CONFLICT_IGNORE);
                     if (rowId == -1) {
@@ -467,7 +474,47 @@ public class MeshStorage extends SQLiteOpenHelper {
                     v.put("date",          nowSec);
                     v.put("is_out",        isOut ? 1 : 0);
                     v.put("mesh_msg_id",   0);
+                    v.put("status",        status);
+                    v.put("snr",           snr);
+                    v.put("hops",          hops);
                     db.insert("messages", null, v);
+                }
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        });
+    }
+
+    public void updateMessageStatus(long dialogId, long meshMsgId, int status) {
+        storageQueue.postRunnable(() -> {
+            try {
+                SQLiteDatabase db = getWritableDatabase();
+                ContentValues v = new ContentValues();
+                v.put("status", status);
+                db.update("messages", v, "dialog_id = ? AND mesh_msg_id = ?",
+                        new String[]{String.valueOf(dialogId), String.valueOf(meshMsgId)});
+                AndroidUtilities.runOnUIThread(() ->
+                        NotificationCenter.getGlobalInstance()
+                                .postNotificationName(NotificationCenter.didUpdateMessages, dialogId));
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        });
+    }
+
+    public void cleanupPendingMessages(long timeoutSec) {
+        storageQueue.postRunnable(() -> {
+            try {
+                SQLiteDatabase db = getWritableDatabase();
+                int threshold = (int) (System.currentTimeMillis() / 1000 - timeoutSec);
+                ContentValues v = new ContentValues();
+                v.put("status", 3); // 3 = Failed
+                int count = db.update("messages", v, "status = 0 AND date < ?", new String[]{String.valueOf(threshold)});
+                if (count > 0) {
+                    FileLog.d("MeshStorage: marked " + count + " pending messages as failed (timeout)");
+                    AndroidUtilities.runOnUIThread(() ->
+                            NotificationCenter.getGlobalInstance()
+                                    .postNotificationName(NotificationCenter.didUpdateMessages, 0L));
                 }
             } catch (Exception e) {
                 FileLog.e(e);
@@ -488,6 +535,9 @@ public class MeshStorage extends SQLiteOpenHelper {
                 m.text         = c.getString(3);
                 m.date         = c.getInt(4);
                 m.isOut        = c.getInt(5) == 1;
+                m.status       = c.getInt(7); // Column 6 is mesh_msg_id
+                m.snr          = c.getFloat(8);
+                m.hops         = c.getInt(9);
                 msgs.add(m);
             }
         } catch (Exception e) {
@@ -597,6 +647,9 @@ public class MeshStorage extends SQLiteOpenHelper {
         public String  text;
         public int     date;
         public boolean isOut;
+        public int     status;
+        public float   snr;
+        public int     hops;
     }
 
     // ============================================================================================

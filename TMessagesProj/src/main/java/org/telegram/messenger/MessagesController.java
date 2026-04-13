@@ -141,6 +141,8 @@ public class MessagesController extends BaseController implements NotificationCe
     private final ConcurrentHashMap<Long, Long> monoForumLinkedChannels = new ConcurrentHashMap<>(3, 1.0f, 2);
     public static int stableIdPointer = 100;
     public static final int MESH_FILTER_ID = 1492;
+    public static final int MESH_CHANNELS_FILTER_ID = 1493;
+    public static final int MESH_CONTACTS_FILTER_ID = 1494;
 
 
     private final HashMap<Long, TLRPC.Chat> activeVoiceChatsMap = new HashMap<>();
@@ -273,9 +275,24 @@ public class MessagesController extends BaseController implements NotificationCe
 
     public void checkMeshFilter() {
         boolean enabled = org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled();
+        
+        // Ensure legacy folder is removed
+        for (int a = 0; a < dialogFilters.size(); a++) {
+            if (dialogFilters.get(a).id == MESH_FILTER_ID) {
+                DialogFilter filter = dialogFilters.remove(a);
+                dialogFiltersById.remove(filter.id);
+                a--;
+            }
+        }
+
+        checkSpecificMeshFilter(enabled, MESH_CHANNELS_FILTER_ID, "Mesh Channels");
+        checkSpecificMeshFilter(enabled, MESH_CONTACTS_FILTER_ID, "Mesh Contacts");
+    }
+
+    private void checkSpecificMeshFilter(boolean enabled, int filterId, String name) {
         int existingIndex = -1;
         for (int a = 0, N = dialogFilters.size(); a < N; a++) {
-            if (dialogFilters.get(a).id == MESH_FILTER_ID) {
+            if (dialogFilters.get(a).id == filterId) {
                 existingIndex = a;
                 break;
             }
@@ -283,9 +300,9 @@ public class MessagesController extends BaseController implements NotificationCe
 
         if (enabled && existingIndex == -1) {
             TLRPC.TL_dialogFilter meshTL = new TLRPC.TL_dialogFilter();
-            meshTL.id = MESH_FILTER_ID;
+            meshTL.id = filterId;
             meshTL.title = new TLRPC.TL_textWithEntities();
-            meshTL.title.text = "Mesh";
+            meshTL.title.text = name;
             DialogFilter meshFilter = new DialogFilter();
             meshFilter.id = meshTL.id;
             meshFilter.name = meshTL.title.text;
@@ -1311,6 +1328,18 @@ public class MessagesController extends BaseController implements NotificationCe
         }
 
         public boolean includesDialog(AccountInstance accountInstance, long dialogId, TLRPC.Dialog d) {
+            // MeshCore: route synthetic IDs to their dedicated folders
+            if (id == 1493) { // Mesh Channels Folder
+                return dialogId <= -2000000000L && dialogId >= -2000000008L;
+            }
+            if (id == 1494) { // Mesh Contacts Folder
+                return dialogId <= -3000000000L && dialogId >= -3999999999L;
+            }
+            // Exclude mesh dialogs from any other folder (except All)
+            if (id != 0 && (dialogId <= -2000000000L)) {
+                return false;
+            }
+
             if (neverShow.contains(dialogId)) {
                 return false;
             }
@@ -11209,6 +11238,49 @@ public class MessagesController extends BaseController implements NotificationCe
     private void loadMessagesInternal(long dialogId, long mergeDialogId, boolean loadInfo, int count, int max_id, int offset_date, boolean fromCache, int minDate, int classGuid, int load_type, int last_message_id, int mode, long threadMessageId, int loadIndex, int first_unread, int unread_count, int last_date, boolean queryFromServer, int mentionsCount, boolean loadDialog, boolean processMessages, boolean isTopic, Timer loaderLogger, long hash) {
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("load messages in chat " + dialogId + " topic_id " + threadMessageId + " count " + count + " max_id " + max_id + " cache " + fromCache + " mindate = " + minDate + " guid " + classGuid + " load_type " + load_type + " last_message_id " + last_message_id + " mode " + mode + " index " + loadIndex + " firstUnread " + first_unread + " unread_count " + unread_count + " last_date " + last_date + " queryFromServer " + queryFromServer + " isTopic " + isTopic);
+        }
+
+        if (dialogId < -2000000000L) {
+            // Mesh Redirect
+            org.telegram.messenger.mesh.MeshStorage storage = org.telegram.messenger.mesh.MeshStorage.getInstance();
+            java.util.ArrayList<org.telegram.messenger.mesh.MeshStorage.MeshMessage> msgs = storage.getMessages(dialogId, count);
+            
+            TLRPC.TL_messages_messages res = new TLRPC.TL_messages_messages();
+            for (org.telegram.messenger.mesh.MeshStorage.MeshMessage m : msgs) {
+                TLRPC.TL_message msg = new TLRPC.TL_message();
+                msg.id = (int) m.id;
+                msg.dialog_id = m.dialogId;
+                msg.message = m.text;
+                msg.date = m.date;
+                msg.out = m.isOut;
+                msg.from_id = m.isOut ? new TLRPC.TL_peerUser() : new TLRPC.TL_peerUser();
+                if (m.isOut) msg.from_id.user_id = getUserConfig().getClientUserId();
+                else msg.from_id.user_id = 11111111; // Fake ID for mesh peers
+                msg.peer_id = new TLRPC.TL_peerUser();
+                msg.peer_id.user_id = m.isOut ? 11111111 : getUserConfig().getClientUserId();
+                msg.send_state = (m.status == 0 && m.isOut) ? 1 : 0;
+                res.messages.add(msg);
+            }
+            processLoadedMessages(res, res.messages.size(), dialogId, mergeDialogId, count, max_id, 0, false, classGuid, first_unread, 0, 0, 0, load_type, false, mode, threadMessageId, loadIndex, false, 0, processMessages, isTopic, null);
+            
+            // Post-processing to add Mesh metadata to MessageObjects
+            AndroidUtilities.runOnUIThread(() -> {
+                ArrayList<MessageObject> objects = dialogMessages.get(dialogId);
+                if (objects != null) {
+                    for (MessageObject mo : objects) {
+                        for (org.telegram.messenger.mesh.MeshStorage.MeshMessage m : msgs) {
+                            if (mo.getId() == m.id) {
+                                mo.isMesh = true;
+                                mo.meshStatus = m.status;
+                                mo.hops = m.hops;
+                                mo.snr = (int)m.snr;
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+            return;
         }
         if (BuildVars.LOGS_ENABLED && loaderLogger == null && mode == 0) {
             loaderLogger = new Timer("MessageLoaderLogger dialogId=" + dialogId + " index=" + loadIndex + " count=" + count);
@@ -24135,11 +24207,21 @@ public class MessagesController extends BaseController implements NotificationCe
             if (ch.name == null || ch.name.isEmpty()) continue;
 
             org.telegram.messenger.mesh.MeshDialog d = new org.telegram.messenger.mesh.MeshDialog();
-            d.id          = -10_000_001L - ch.slotIndex;   // -10_000_001 … -10_000_008
+            d.id          = org.telegram.messenger.mesh.MeshStorage.channelDialogId(ch.slotIndex);
             d.meshName    = ch.name;
-            d.lastMessage = storage.getLastChannelMessageText(ch.slotIndex);
+            
+            java.util.ArrayList<org.telegram.messenger.mesh.MeshStorage.MeshMessage> msgs = storage.getMessages(d.id, 1);
+            if (!msgs.isEmpty()) {
+                org.telegram.messenger.mesh.MeshStorage.MeshMessage m = msgs.get(0);
+                d.lastMessage = m.text;
+                d.snr = m.snr;
+                d.hops = m.hops;
+                d.last_message_date = m.date;
+            } else {
+                d.lastMessage = "";
+                d.last_message_date = (int) (System.currentTimeMillis() / 1000L);
+            }
             d.top_message = 0;
-            d.last_message_date = (int) (System.currentTimeMillis() / 1000L);
             d.channelSlot = ch.slotIndex;
             result.add(d);
         }
@@ -24149,17 +24231,22 @@ public class MessagesController extends BaseController implements NotificationCe
                 storage.getMeshContacts();
         for (org.telegram.messenger.mesh.MeshStorage.MeshContact c : contacts) {
             org.telegram.messenger.mesh.MeshDialog d = new org.telegram.messenger.mesh.MeshDialog();
-            // Derive a stable negative ID from the first 7 hex chars of the pubkey
-            try {
-                d.id = -(Long.parseLong(c.pubKeyHex.substring(0, 7), 16) + 20_000_000L);
-            } catch (Exception ignored) {
-                d.id = -20_000_000L - result.size();
-            }
+            d.id          = org.telegram.messenger.mesh.MeshStorage.contactDialogId(c.pubKeyHex);
             d.meshName    = (c.name != null && !c.name.isEmpty()) ? c.name : c.pubKeyHex.substring(0, 8) + "…";
-            d.lastMessage = storage.getLastContactMessageText(c.pubKeyHex);
+            
+            java.util.ArrayList<org.telegram.messenger.mesh.MeshStorage.MeshMessage> msgs = storage.getMessages(d.id, 1);
+            if (!msgs.isEmpty()) {
+                org.telegram.messenger.mesh.MeshStorage.MeshMessage m = msgs.get(0);
+                d.lastMessage = m.text;
+                d.snr = m.snr;
+                d.hops = m.hops;
+                d.last_message_date = m.date;
+            } else {
+                d.lastMessage = "";
+                d.last_message_date = (int) (System.currentTimeMillis() / 1000L);
+            }
             d.top_message = 0;
-            d.last_message_date = (int) (System.currentTimeMillis() / 1000L);
-            d.pubKeyHex = c.pubKeyHex;
+            d.pubKeyHex   = c.pubKeyHex;
             result.add(d);
         }
 

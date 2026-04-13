@@ -175,6 +175,15 @@ public class MeshManager {
                                       long freqHz, float bwKHz, int sf, int cr) {}
     }
 
+    private final Runnable pendingCleanupRunnable = new Runnable() {
+        @Override
+        public void run() {
+            // Mark messages older than 5 minutes as failed
+            MeshStorage.getInstance().cleanupPendingMessages(300);
+            handler.postDelayed(this, 30_000); // Check every 30s
+        }
+    };
+
     public void addListener(MeshManagerListener l)    { if (!listeners.contains(l)) listeners.add(l); }
     public void removeListener(MeshManagerListener l) { listeners.remove(l); }
 
@@ -196,6 +205,7 @@ public class MeshManager {
         f.addAction(BluetoothDevice.ACTION_PAIRING_REQUEST);
         f.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
         ApplicationLoader.applicationContext.registerReceiver(pairingReceiver, f);
+        handler.post(pendingCleanupRunnable);
     }
 
     // ---- BLE Pairing (Bonding) ----
@@ -869,10 +879,6 @@ public class MeshManager {
                 break;
 
             case PACKET_ACK:
-                // ACK payload (per companion_protocol.md):
-                //   Byte 0: 0x82
-                //   Bytes 1-4: echo of the first 4 bytes of the command that was ACK'd
-                //              (or random_id of the sent message when present)
                 if (data.length >= 5) {
                     long ackToken = ((long)(data[1] & 0xFF))
                             | ((long)(data[2] & 0xFF) << 8)
@@ -880,16 +886,23 @@ public class MeshManager {
                             | ((long)(data[4] & 0xFF) << 24);
                     FileLog.d(TAG + ": PACKET_ACK token=0x" + String.format("%08X", ackToken)
                             + " — message delivered to device radio");
-                    // TODO Phase 2: mark outbox message as ACK'd in MeshStorage
+                    
+                    // Logic to derive dialogId from token (CMD=0x03, slot=byte 2)
+                    if ((ackToken & 0xFF) == 0x03) {
+                        int slot = (int)((ackToken >> 16) & 0xFF);
+                        long dialogId = MeshStorage.channelDialogId(slot);
+                        MeshStorage.getInstance().updateMessageStatus(dialogId, ackToken, 2); // 2 = Delivered
+                    }
                 } else {
                     FileLog.d(TAG + ": PACKET_ACK (no payload)");
                 }
                 break;
 
             case PACKET_MSG_SENT:
-                // Device accepted the message for transmission over LoRa radio.
-                // No further handshake action needed; the write queue drains automatically.
                 FileLog.d(TAG + ": PACKET_MSG_SENT — message accepted by radio");
+                // For radio acceptance, we mark as status 1 (Sent to LoRa)
+                // Since this packet has no token, it refers to the last sent item.
+                // In this simplified version, we'll let PACKET_ACK handle the delivery update.
                 break;
 
             default:
@@ -1162,8 +1175,14 @@ public class MeshManager {
         packet[6] = (byte) ((ts >> 24) & 0xFF);
         System.arraycopy(textBytes, 0, packet, 7, textBytes.length);
 
+        // Generate token for matching ACK/Status (echo of first 4 bytes)
+        long meshMsgId = ((long)(packet[0] & 0xFF))
+                | ((long)(packet[1] & 0xFF) << 8)
+                | ((long)(packet[2] & 0xFF) << 16)
+                | ((long)(packet[3] & 0xFF) << 24);
+
         Runnable saveToHistory = () ->
-                MeshStorage.getInstance().saveChannelMessage(channelIndex, null, text, true);
+                MeshStorage.getInstance().saveChannelMessage(channelIndex, null, text, true, meshMsgId);
 
         if (isHandshakeComplete) {
             enqueueWrite(packet);

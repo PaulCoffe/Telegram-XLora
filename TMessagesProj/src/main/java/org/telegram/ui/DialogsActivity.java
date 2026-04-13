@@ -491,6 +491,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private boolean downloadsItemVisible;
     public ActionBarMenuItem searchItem;
     private ActionBarMenuItem optionsItem;
+    private ActionBarMenuItem meshAddItem;
     private ActionBarMenuItem speedItem;
     public static boolean switchingTheme;
     private ActionBarMenuItem doneItem;
@@ -3247,6 +3248,71 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             downloadsItem.addView(downloadProgressIcon = new DownloadProgressIcon(currentAccount, context));
             downloadsItem.setContentDescription(getString(R.string.DownloadsTabs));
             downloadsItem.setVisibility(View.GONE);
+
+        meshAddItem = menu.addItem(1492, R.drawable.ic_ab_other); // Temporary using ic_ab_other or ic_add
+        meshAddItem.setVisibility(View.GONE);
+        meshAddItem.setOnClickListener(v -> {
+            MessagesController.DialogFilter filter = getMessagesController().getDialogFilters().get(viewPages[0].selectedType);
+            if (filter.id == 1493) {
+                // Add Channel
+                AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+                builder.setTitle("Add Mesh Channel");
+                final EditText editText = new EditText(getParentActivity());
+                editText.setHint("Channel Name");
+                builder.setView(editText);
+                builder.setPositiveButton("Add", (dialog, which) -> {
+                    String name = editText.getText().toString().trim();
+                    if (!name.isEmpty()) {
+                        // In reality, slot 0 is Primary. We find first free slot 1-7.
+                        org.telegram.messenger.mesh.MeshStorage storage = org.telegram.messenger.mesh.MeshStorage.getInstance();
+                        java.util.List<org.telegram.messenger.mesh.MeshStorage.LoraChannel> channels = storage.getLoraChannels();
+                        int nextSlot = -1;
+                        for (int i = 1; i < 8; i++) {
+                            boolean used = false;
+                            for (org.telegram.messenger.mesh.MeshStorage.LoraChannel ch : channels) {
+                                if (ch.slotIndex == i && !ch.name.isEmpty()) {
+                                    used = true;
+                                    break;
+                                }
+                            }
+                            if (!used) {
+                                nextSlot = i;
+                                break;
+                            }
+                        }
+                        if (nextSlot != -1) {
+                            storage.saveLoraChannel(nextSlot, name, null, true);
+                            getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+                        }
+                    }
+                });
+                builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+                showDialog(builder.create());
+            } else if (filter.id == 1494) {
+                 // Add Contact
+                AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
+                builder.setTitle("Add Mesh Contact");
+                LinearLayout layout = new LinearLayout(getParentActivity());
+                layout.setOrientation(LinearLayout.VERTICAL);
+                final EditText nameEdit = new EditText(getParentActivity());
+                nameEdit.setHint("Nickname");
+                final EditText pubKeyEdit = new EditText(getParentActivity());
+                pubKeyEdit.setHint("Public Key (Hex)");
+                layout.addView(nameEdit);
+                layout.addView(pubKeyEdit);
+                builder.setView(layout);
+                builder.setPositiveButton("Add", (dialog, which) -> {
+                    String name = nameEdit.getText().toString().trim();
+                    String pk = pubKeyEdit.getText().toString().trim();
+                    if (!pk.isEmpty()) {
+                        org.telegram.messenger.mesh.MeshStorage.getInstance().updateNode(pk, name, 0, 0);
+                        getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+                    }
+                });
+                builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+                showDialog(builder.create());
+            }
+        });
 
             updateProxyButton(false, false);
         }
@@ -6771,6 +6837,16 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         viewPages[a].dialogsAdapter.setDialogsType(viewPages[a].dialogsType);
         viewPages[a].layoutManager.scrollToPositionWithOffset(viewPages[a].dialogsType == DIALOGS_TYPE_DEFAULT && hasHiddenArchive() && viewPages[a].archivePullViewState == ARCHIVE_ITEM_STATE_HIDDEN ? 1 : 0, (int) scrollYOffset);
         checkListLoad(viewPages[a]);
+        
+        if (meshAddItem != null && searchItem != null) {
+            if (filter.id == 1493 || filter.id == 1494) {
+                meshAddItem.setVisibility(View.VISIBLE);
+                searchItem.setVisibility(View.GONE);
+            } else {
+                meshAddItem.setVisibility(View.GONE);
+                searchItem.setVisibility(View.VISIBLE);
+            }
+        }
     }
 
     private boolean scrollBarVisible = true;
