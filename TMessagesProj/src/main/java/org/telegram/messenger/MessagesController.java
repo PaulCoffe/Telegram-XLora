@@ -11265,7 +11265,7 @@ public class MessagesController extends BaseController implements NotificationCe
             
             // Post-processing to add Mesh metadata to MessageObjects
             AndroidUtilities.runOnUIThread(() -> {
-                ArrayList<MessageObject> objects = dialogMessages.get(dialogId);
+                ArrayList<MessageObject> objects = dialogMessage.get(dialogId);
                 if (objects != null) {
                     for (MessageObject mo : objects) {
                         for (org.telegram.messenger.mesh.MeshStorage.MeshMessage m : msgs) {
