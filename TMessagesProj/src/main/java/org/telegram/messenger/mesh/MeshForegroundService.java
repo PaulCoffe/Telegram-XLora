@@ -51,7 +51,7 @@ public class MeshForegroundService extends Service {
         }
 
         if (MeshTransportManager.getInstance().isMeshEnabled()) {
-            MeshManager.getInstance().startScanningIfPermissionsGranted();
+            MeshManager.getInstance().autoConnectToSavedDevice();
         }
 
         return START_STICKY;

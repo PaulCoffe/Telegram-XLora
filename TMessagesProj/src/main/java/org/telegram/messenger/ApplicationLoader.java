@@ -322,7 +322,7 @@ public class ApplicationLoader extends Application {
         try {
             org.telegram.messenger.mesh.MeshTransportManager.getInstance();
             if (org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled()) {
-                org.telegram.messenger.mesh.MeshManager.getInstance().startScanningIfPermissionsGranted();
+                org.telegram.messenger.mesh.MeshManager.getInstance().autoConnectToSavedDevice();
             }
         } catch (Throwable e) {
             FileLog.e("MeshInit", e);

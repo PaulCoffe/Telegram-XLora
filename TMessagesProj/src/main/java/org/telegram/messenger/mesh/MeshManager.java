@@ -255,6 +255,21 @@ public class MeshManager {
         if (granted) startScanning();
     }
 
+    public void autoConnectToSavedDevice() {
+        if (isConnected || isConnecting) return;
+        String saved = MeshTransportManager.getInstance().getSelectedDeviceAddress();
+        if (saved != null) {
+            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+            if (adapter != null && adapter.isEnabled()) {
+                BluetoothDevice d = adapter.getRemoteDevice(saved);
+                if (d != null) {
+                    FileLog.d(TAG + ": Auto-connecting directly to saved device: " + saved);
+                    connectToDevice(d);
+                }
+            }
+        }
+    }
+
     public void startScanning() {
         if (isScanning) return;
 
@@ -298,7 +313,8 @@ public class MeshManager {
         }
 
         handler.removeCallbacks(stopScanRunnable);
-        handler.postDelayed(stopScanRunnable, 30_000);
+        // Only stop after 15 seconds instead of 30, and do not auto-restart
+        handler.postDelayed(stopScanRunnable, 15_000);
     }
 
     private final Runnable stopScanRunnable = this::stopScanning;
@@ -331,7 +347,7 @@ public class MeshManager {
      * can still be connected to by MAC address.
      */
     private static final String[] MESHCORE_NAME_KEYWORDS = {
-        "meshcore", "mesh", "heltec", "lilygo", "lora", "t114", "t3s3", "meshtastic"
+        "meshcore", "drip", "heltec", "lilygo"
     };
 
     private boolean isMeshCoreDevice(String name) {
@@ -351,9 +367,9 @@ public class MeshManager {
 
             String name = getDeviceName(device);
 
-            // Accept devices whose name matches MeshCore keywords OR that have no name
-            // (unnamed devices may still be MeshCore — user can try connecting by address)
-            if (!isMeshCoreDevice(name) && name != null && !name.isEmpty() && !name.equals("Mesh Device")) {
+            // Strict filtering: We ONLY accept devices that match the name keywords.
+            // Any completely unnamed devices or random MACs are ignored.
+            if (!isMeshCoreDevice(name)) {
                 return; // skip non-MeshCore named devices
             }
 
@@ -443,6 +459,15 @@ public class MeshManager {
         FileLog.d(TAG + ": Connecting to " + currentDeviceAddress + "...");
         handler.post(() -> { for (MeshManagerListener l : listeners) l.onConnectionStateChanged(false); });
         
+        // 1.4 Handle Sync hanging: 15-second handshake timeout
+        handler.postDelayed(() -> {
+            if (isConnecting || (isConnected && !isHandshakeComplete)) {
+                FileLog.e(TAG + ": Handshake timeout. Disconnecting ghost connection.");
+                stopAll();
+                handler.post(() -> Toast.makeText(ApplicationLoader.applicationContext, "Таймаут синхронизации. Проверьте пароль.", Toast.LENGTH_LONG).show());
+            }
+        }, 15_000);
+        
         try {
             // autoConnect=false for reliable first-time connection
             bluetoothGatt = device.connectGatt(ApplicationLoader.applicationContext, false, gattCallback,
@@ -461,9 +486,8 @@ public class MeshManager {
     private void scheduleReconnect() {
         if (currentDeviceAddress == null) return;
         if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-            FileLog.e(TAG + ": Max reconnect attempts reached. Restarting scan.");
+            FileLog.e(TAG + ": Max reconnect attempts reached. Giving up auto-reconnect.");
             reconnectAttempts = 0;
-            handler.post(this::startScanningIfPermissionsGranted);
             return;
         }
         long delay = RECONNECT_DELAYS_MS[reconnectAttempts++];
@@ -480,11 +504,29 @@ public class MeshManager {
 
     public void stopAll() {
         stopScanning();
+        isConnected = false;
+        isConnecting = false;
+        isHandshakeComplete = false;
+        isWriting = false;
+        writeQueue.clear();
+        MeshTransportManager.getInstance().setSelectedDeviceAddress(null);
+        currentDeviceAddress = null;
+        reconnectAttempts = 0;
+        gattErrorStreak = 0;
         if (bluetoothGatt != null) {
-            bluetoothGatt.disconnect();
-            bluetoothGatt.close();
+            try {
+                bluetoothGatt.disconnect();
+                bluetoothGatt.close();
+            } catch (Exception ignored) {}
             bluetoothGatt = null;
         }
+        rxCharacteristic = null;
+        handler.post(() -> {
+            for (MeshManagerListener l : listeners) {
+                l.onConnectionStateChanged(false);
+                l.onDevicesUpdated();
+            }
+        });
     }
 
     // ============================================================

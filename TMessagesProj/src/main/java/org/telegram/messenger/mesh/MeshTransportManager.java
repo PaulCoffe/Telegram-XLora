@@ -180,7 +180,7 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
         MessagesController.getInstance(UserConfig.selectedAccount).checkMeshFilter();
 
         if (enabled) {
-            MeshManager.getInstance().startScanning();
+            MeshManager.getInstance().autoConnectToSavedDevice();
             MeshForegroundService.start();
         } else {
             MeshManager.getInstance().stopAll();
@@ -287,6 +287,14 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
         selfPubKeyHex  = pubKeyHex;
         selfDeviceName = name;
 
+        // Auto-associate local node ("Self") to the "Saved Messages" TG chat (clientUserId)
+        try {
+            long clientUserId = UserConfig.getInstance(UserConfig.selectedAccount).getClientUserId();
+            org.telegram.messenger.mesh.MeshStorage.getInstance().linkNodeToUser(pubKeyHex, clientUserId);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+
         // Sync local radio config to match device
         if (freqHz > 0) {
             this.frequency       = freqHz;
@@ -363,7 +371,7 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
         long tgUserId = MeshStorage.getInstance().getTgUserIdCached(pubKeyHex);
         if (tgUserId != 0) {
             // Inject into the real Telegram chat for seamless hybrid experience
-            injectMeshMessageToTgChat(tgUserId, pubKeyHex, text, (int) timestampSec);
+            injectMeshMessageToTgChat(tgUserId, pubKeyHex, text, (int) timestampSec, snr, hops);
         }
 
         // Always persist to Mesh contact storage
@@ -391,8 +399,10 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
      * @param pubKeyHex  the sender's Mesh pubkey prefix (for logging)
      * @param text       the message text
      * @param dateSeconds Unix timestamp in seconds
+     * @param snr         signal-to-noise ratio
+     * @param hops        network hops
      */
-    private void injectMeshMessageToTgChat(long tgUserId, String pubKeyHex, String text, int dateSeconds) {
+    private void injectMeshMessageToTgChat(long tgUserId, String pubKeyHex, String text, int dateSeconds, int snr, int hops) {
         try {
             int account = UserConfig.selectedAccount;
             MessagesController mc = MessagesController.getInstance(account);
@@ -413,6 +423,16 @@ public class MeshTransportManager implements MeshManager.MeshManagerListener {
             TLRPC.TL_peerUser peerUser = new TLRPC.TL_peerUser();
             peerUser.user_id = tgUserId;
             msg.peer_id = peerUser;
+
+            // Pack MESH info into custom_params
+            try {
+                msg.custom_params = new org.telegram.tgnet.NativeByteBuffer(12);
+                msg.custom_params.writeInt32(0x4D455348); // "MESH" magic
+                msg.custom_params.writeInt32(hops);
+                msg.custom_params.writeInt32(snr);
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
 
             // Build MessageObject (in = not from us)
             MessageObject msgObj = new MessageObject(account, msg, false, false);

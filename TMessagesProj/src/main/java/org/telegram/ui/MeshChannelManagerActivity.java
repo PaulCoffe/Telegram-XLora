@@ -47,6 +47,7 @@ public class MeshChannelManagerActivity extends BaseFragment
     private static final int ID_SLOT_BASE       = 100;   // 100-107 = slot 0-7
     private static final int ID_ADD_PRIVATE     = 200;
     private static final int ID_ADD_HASHTAG     = 201;
+    private static final int ID_IMPORT_PRIVATE  = 202;
 
     @Override
     public View createView(Context context) {
@@ -101,12 +102,14 @@ public class MeshChannelManagerActivity extends BaseFragment
         boolean handshake = MeshManager.getInstance().isHandshakeComplete();
         String  hint      = handshake ? "" : " (нужно подключение)";
 
-        items.add(UItem.asButton(ID_ADD_PRIVATE, "🔒 Приватный канал" + hint,
+        items.add(UItem.asButton(ID_ADD_PRIVATE, "🔒 Создать приватный канал" + hint,
                 "Случайный 16-байтный ключ (CSPRNG)").accent());
-        items.add(UItem.asButton(ID_ADD_HASHTAG, "# Хештег канал" + hint,
+        items.add(UItem.asButton(ID_IMPORT_PRIVATE, "🔑 Добавить существующий канал" + hint,
+                "Ввести название и 32-символьный Hex ключ").accent());
+        items.add(UItem.asButton(ID_ADD_HASHTAG, "# Создать Хештег канал" + hint,
                 "Ключ из SHA256(\"#название\")").accent());
         items.add(UItem.asShadow("Приватный: ключ генерируется случайно и не покидает устройство без экспорта. "
-                + "Хештег: любой знающий имя канала может вычислить ключ."));
+                + "Хештег: любой знающий имя канала может вычислить ключ. Добавить: если у вас уже есть ключ от друзей."));
     }
 
     private MeshStorage.LoraChannel findChannel(ArrayList<MeshStorage.LoraChannel> list, int slot) {
@@ -147,6 +150,8 @@ public class MeshChannelManagerActivity extends BaseFragment
             showCreatePrivateChannelDialog();
         } else if (id == ID_ADD_HASHTAG) {
             showCreateHashtagChannelDialog();
+        } else if (id == ID_IMPORT_PRIVATE) {
+            showImportPrivateChannelDialog(-1);
         }
     }
 
@@ -161,7 +166,7 @@ public class MeshChannelManagerActivity extends BaseFragment
         if (slotIdx == 0) {
             options = new String[]{"Войти в публичный канал"};
         } else {
-            options = new String[]{"Создать приватный канал", "Создать хештег канал", "Очистить слот"};
+            options = new String[]{"Создать приватный канал", "Добавить по ключу", "Создать хештег канал", "Очистить слот"};
         }
         b.setItems(options, (dialog, which) -> {
             if (slotIdx == 0) {
@@ -171,8 +176,9 @@ public class MeshChannelManagerActivity extends BaseFragment
             }
             switch (which) {
                 case 0: showCreatePrivateChannelDialogForSlot(slotIdx); break;
-                case 1: showCreateHashtagChannelDialogForSlot(slotIdx); break;
-                case 2: clearSlot(slotIdx); break;
+                case 1: showImportPrivateChannelDialog(slotIdx); break;
+                case 2: showCreateHashtagChannelDialogForSlot(slotIdx); break;
+                case 3: clearSlot(slotIdx); break;
             }
         });
         showDialog(b.create());
@@ -217,7 +223,6 @@ public class MeshChannelManagerActivity extends BaseFragment
         EditText nameField = new EditText(getParentActivity());
         nameField.setHint("#название (без #, например: moscow)");
         nameField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        container.addView(nameField, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 20, 8, 20, 8));
         b.setView(container);
         b.setPositiveButton("Создать", (dialog, which) -> {
             String hashtag = nameField.getText().toString().trim().toLowerCase();
@@ -230,6 +235,49 @@ public class MeshChannelManagerActivity extends BaseFragment
             byte[] secret = hashtagToSecret("#" + hashtag);
             if (secret == null) { toast("Ошибка вычисления хеша"); return; }
             applyChannel(slot, "#" + hashtag, secret, true);
+        });
+        b.setNegativeButton("Отмена", null);
+        showDialog(b.create());
+    }
+
+    private void showImportPrivateChannelDialog(int preferredSlot) {
+        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+        b.setTitle("Импорт канала");
+        android.widget.LinearLayout container = new android.widget.LinearLayout(getParentActivity());
+        container.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int pad = org.telegram.messenger.AndroidUtilities.dp(20);
+        container.setPadding(pad, 8, pad, 8);
+
+        EditText nameField = new EditText(getParentActivity());
+        nameField.setHint("Название канала");
+        nameField.setInputType(InputType.TYPE_CLASS_TEXT);
+
+        EditText keyField = new EditText(getParentActivity());
+        keyField.setHint("Ключ (32 Hex символа)");
+        keyField.setInputType(InputType.TYPE_CLASS_TEXT);
+
+        container.addView(nameField);
+        container.addView(keyField);
+        b.setView(container);
+
+        b.setPositiveButton("Добавить", (dialog, which) -> {
+            String name = nameField.getText().toString().trim();
+            String keyHex = keyField.getText().toString().trim();
+            if (name.isEmpty() || keyHex.length() != 32) {
+                toast("Некорректное имя или длина ключа (ровно 32 симв)");
+                return;
+            }
+            try {
+                byte[] secret = hexStringToByteArray(keyHex);
+                int slot = preferredSlot >= 0 ? preferredSlot : findFreeSlot();
+                if (slot < 0) {
+                    toast("Нет свободных слотов");
+                    return;
+                }
+                applyChannel(slot, name, secret, false);
+            } catch (Exception e) {
+                toast("Ошибка разбора ключа (только HEX [0-9A-Fa-f])");
+            }
         });
         b.setNegativeButton("Отмена", null);
         showDialog(b.create());
@@ -318,6 +366,16 @@ public class MeshChannelManagerActivity extends BaseFragment
         StringBuilder sb = new StringBuilder(bytes.length * 2);
         for (byte b : bytes) sb.append(String.format("%02x", b));
         return sb.toString();
+    }
+
+    private static byte[] hexStringToByteArray(String s) {
+        int len = s.length();
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
+                                 + Character.digit(s.charAt(i+1), 16));
+        }
+        return data;
     }
 
     private void toast(String msg) {

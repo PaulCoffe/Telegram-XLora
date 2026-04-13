@@ -48,12 +48,8 @@ public class MeshSettingsActivity extends BaseFragment
     private static final int ID_DISCONNECT       = 11;
     private static final int ID_SCAN             = 100;
 
-    private static final int ID_RADIO_FREQ       = 200;
-    private static final int ID_RADIO_BW         = 201;
-    private static final int ID_RADIO_SF         = 202;
-    private static final int ID_RADIO_CR         = 203;
-    private static final int ID_PRESET_SELECT    = 204;
-    private static final int ID_PRESET_SAVE      = 205;
+    private static final int ID_SET_NODE_NAME    = 199;
+    private static final int ID_OPEN_RADIO_SETTINGS = 200;
 
     private static final int ID_DEVICE_BASE      = 2;      //  2–99
     private static final int ID_NODE_BASE        = 1000;   // 1000+
@@ -103,6 +99,7 @@ public class MeshSettingsActivity extends BaseFragment
                         ? pubKey.substring(0, 12) + "…" : (pubKey != null ? pubKey : "—");
 
                 items.add(UItem.asButton(0, nameStr, "Ключ: " + pkStr + " · Подключено ✓").accent());
+                items.add(UItem.asButton(ID_SET_NODE_NAME, "Изменить имя узла", ""));
                 items.add(UItem.asButton(ID_DISCONNECT, "Отключиться", ""));
             } else {
                 items.add(UItem.asButton(0, "Синхронизация…", "Идёт рукопожатие с устройством"));
@@ -128,18 +125,9 @@ public class MeshSettingsActivity extends BaseFragment
 
         // ── Section 4: Radio Config ──────────────────────────────────
         items.add(UItem.asHeader("Настройки радио"));
-        items.add(UItem.asButton(ID_RADIO_FREQ, "Частота (Гц)",
-                String.valueOf(MeshTransportManager.getInstance().getFrequency())));
-        items.add(UItem.asButton(ID_RADIO_BW,   "Полоса (кГц)",
-                String.valueOf(MeshTransportManager.getInstance().getBandwidth())));
-        items.add(UItem.asButton(ID_RADIO_SF,   "SF (7–12)",
-                String.valueOf(MeshTransportManager.getInstance().getSpreadingFactor())));
-        items.add(UItem.asButton(ID_RADIO_CR,   "CR (4/5…4/8)",
-                "4/" + MeshTransportManager.getInstance().getCodingRate()));
-        items.add(UItem.asButton(ID_PRESET_SELECT, "Регион / Пресет",
-                MeshTransportManager.getInstance().getCurrentPresetName()).accent());
-        items.add(UItem.asButton(ID_PRESET_SAVE, "Сохранить текущие как пресет", ""));
-        items.add(UItem.asShadow(null));
+        items.add(UItem.asButton(ID_OPEN_RADIO_SETTINGS, "Открыть параметры радио эфира",
+                MeshTransportManager.getInstance().getCurrentPresetName() + " (нажмите для настройки)").accent());
+        items.add(UItem.asShadow("Настройка частоты, полосы пропускания и SF для совместимости модулей."));
 
         // ── Section 5: BLE Scan / Device Selection ───────────────────
         items.add(UItem.asButton(ID_SCAN,
@@ -181,8 +169,6 @@ public class MeshSettingsActivity extends BaseFragment
         if (id == ID_TOGGLE_MESH) {
             boolean enabled = !MeshTransportManager.getInstance().isMeshEnabled();
             MeshTransportManager.getInstance().setMeshEnabled(enabled);
-            if (enabled) checkPermissionsAndScan();
-            else MeshManager.getInstance().stopScanning();
             refreshList();
 
         } else if (id == ID_OPEN_CHANNELS) {
@@ -210,70 +196,14 @@ public class MeshSettingsActivity extends BaseFragment
                 refreshList();
             }
 
-        } else if (id == ID_RADIO_FREQ) {
-            showInput("Частота (Гц)", String.valueOf(MeshTransportManager.getInstance().getFrequency()),
-                    val -> {
-                        try {
-                            MeshTransportManager.getInstance().setRadioConfig(
-                                    Long.parseLong(val),
-                                    MeshTransportManager.getInstance().getBandwidth(),
-                                    MeshTransportManager.getInstance().getSpreadingFactor(),
-                                    MeshTransportManager.getInstance().getCodingRate());
-                        } catch (NumberFormatException ignored) {}
-                        refreshList();
-                    });
+        } else if (id == ID_OPEN_RADIO_SETTINGS) {
+            presentFragment(new MeshRadioSettingsActivity());
 
-        } else if (id == ID_RADIO_BW) {
-            showInput("Полоса (кГц)", String.valueOf(MeshTransportManager.getInstance().getBandwidth()),
-                    val -> {
-                        try {
-                            MeshTransportManager.getInstance().setRadioConfig(
-                                    MeshTransportManager.getInstance().getFrequency(),
-                                    Float.parseFloat(val),
-                                    MeshTransportManager.getInstance().getSpreadingFactor(),
-                                    MeshTransportManager.getInstance().getCodingRate());
-                        } catch (NumberFormatException ignored) {}
-                        refreshList();
-                    });
-
-        } else if (id == ID_RADIO_SF) {
-            showInput("SF (7–12)", String.valueOf(MeshTransportManager.getInstance().getSpreadingFactor()),
-                    val -> {
-                        try {
-                            int sf = Integer.parseInt(val);
-                            if (sf < 7 || sf > 12) { toast("SF должен быть от 7 до 12"); return; }
-                            MeshTransportManager.getInstance().setRadioConfig(
-                                    MeshTransportManager.getInstance().getFrequency(),
-                                    MeshTransportManager.getInstance().getBandwidth(),
-                                    sf,
-                                    MeshTransportManager.getInstance().getCodingRate());
-                        } catch (NumberFormatException ignored) {}
-                        refreshList();
-                    });
-
-        } else if (id == ID_RADIO_CR) {
-            showInput("CR (5–8 для 4/5–4/8)", String.valueOf(MeshTransportManager.getInstance().getCodingRate()),
-                    val -> {
-                        try {
-                            int cr = Integer.parseInt(val);
-                            if (cr < 5 || cr > 8) { toast("CR должен быть от 5 до 8"); return; }
-                            MeshTransportManager.getInstance().setRadioConfig(
-                                    MeshTransportManager.getInstance().getFrequency(),
-                                    MeshTransportManager.getInstance().getBandwidth(),
-                                    MeshTransportManager.getInstance().getSpreadingFactor(),
-                                    cr);
-                        } catch (NumberFormatException ignored) {}
-                        refreshList();
-                    });
-
-        } else if (id == ID_PRESET_SELECT) {
-            showPresetSelector();
-
-        } else if (id == ID_PRESET_SAVE) {
-            showInput("Название пресета", "", name -> {
-                if (name != null && !name.trim().isEmpty()) {
-                    MeshTransportManager.getInstance().saveUserPreset(name.trim());
-                    toast("Пресет '" + name.trim() + "' сохранён");
+        } else if (id == ID_SET_NODE_NAME) {
+            showInput("Новое имя узла", MeshTransportManager.getInstance().getSelfDeviceName(), newName -> {
+                if (newName != null && !newName.trim().isEmpty()) {
+                    MeshManager.getInstance().sendSetOwnerInfo(newName.trim());
+                    toast("Имя отправлено на устройство");
                     refreshList();
                 }
             });

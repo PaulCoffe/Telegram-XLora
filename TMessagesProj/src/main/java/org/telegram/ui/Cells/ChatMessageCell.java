@@ -18323,7 +18323,8 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         }
         timeTextWidth = timeWidth = (int) Math.ceil(Theme.chat_timePaint.measureText(currentTimeString, 0, currentTimeString == null ? 0 : currentTimeString.length()));
         if (currentMessageObject != null && currentMessageObject.isMesh) {
-            timeWidth += dp(14) + (int) Math.ceil(Theme.chat_timePaint.measureText(" Mesh"));
+            String meshMetadata = String.format("Mesh Route H%d S%d", currentMessageObject.hops, currentMessageObject.snr);
+            timeWidth += dp(14) + (int) Math.ceil(Theme.chat_timePaint.measureText(meshMetadata));
         }
         if (currentMessageObject.scheduled && currentMessageObject.messageOwner.date == 0x7FFFFFFE || currentMessageObject.notime) {
             timeWidth -= dp(8);
@@ -23778,9 +23779,11 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 canvas.translate(drawTimeX = timeTitleTimeX + additionalX, drawTimeY = layoutHeight - dp(pinnedBottom || pinnedTop ? 7.5f : 6.5f) - timeLayout.getHeight() + timeYOffset);
                 if (currentMessageObject != null && currentMessageObject.isMesh) {
                     canvas.save();
-                    float indicatorX = -dp(12);
+                    String meshMetadata = String.format("Mesh Route H%d S%d", currentMessageObject.hops, currentMessageObject.snr);
+                    float metadataWidth = Theme.chat_timePaint.measureText(meshMetadata);
+                    float indicatorX = -dp(12) - metadataWidth + Theme.chat_timePaint.measureText("Mesh");
                     Theme.chat_timePaint.setAlpha((int) (Theme.chat_timePaint.getAlpha() * 0.7f));
-                    canvas.drawText("Mesh", indicatorX, 0, Theme.chat_timePaint);
+                    canvas.drawText(meshMetadata, indicatorX, 0, Theme.chat_timePaint);
                     Theme.chat_timePaint.setAlpha(255);
                     canvas.restore();
                 }
@@ -23950,6 +23953,40 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         boolean useScale = progress != 1f;
         float scale = 0.5f + 0.5f * progress;
         alpha *= progress;
+
+        if (currentMessageObject != null && currentMessageObject.isMesh) {
+            String statusText = "";
+            if (drawTime) {
+                statusText = "Sending...";
+            } else if (drawError) {
+                statusText = "Failed";
+            }
+            if (!statusText.isEmpty() && !currentMessageObject.isOutOwner()) {
+                int clockColor;
+                if (shouldDrawTimeOnMedia()) {
+                    clockColor = getThemedColor(Theme.key_chat_mediaSentClock);
+                } else {
+                    clockColor = getThemedColor(drawSelectionBackground ? Theme.key_chat_outSentClockSelected : Theme.key_chat_mediaSentClock);
+                }
+                Theme.chat_timePaint.setColor(clockColor);
+                Theme.chat_timePaint.setAlpha((int) (255 * alpha));
+                float timeY;
+                if (shouldDrawTimeOnMedia()) {
+                    timeY = getPhotoBottom() + additionalTimeOffsetY - dp(9.0f) + timeYOffset;
+                } else {
+                    timeY = layoutHeight - dp(pinnedBottom || pinnedTop ? 9.5f : 8.5f) + timeYOffset;
+                    if (isRoundVideo) {
+                        timeY -= (dp(drawPinnedBottom ? 4 : 5) + reactionsLayoutInBubble.getCurrentTotalHeight(transitionParams.animateChangeProgress)) * (1f - getVideoTranscriptionProgress());
+                    }
+                }
+                float x = timeX + (currentMessageObject.scheduled ? 0 : dp(11));
+                canvas.drawText(statusText, x, timeY, Theme.chat_timePaint);
+                Theme.chat_timePaint.setAlpha(255);
+                invalidate();
+                return;
+            }
+        }
+
         if (drawTime) {
             if (!currentMessageObject.isOutOwner()) {
                 MsgClockDrawable clockDrawable = Theme.chat_msgClockDrawable;
@@ -24290,6 +24327,47 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         timeY -= dp(8.5f);
 
         float offsetX = currentMessageObject != null && currentMessageObject.isAnyKindOfSticker() ? dp(-STICKER_STATUS_OFFSET) : 0;
+
+        if (currentMessageObject != null && currentMessageObject.isMesh) {
+            String statusText = "";
+            if (drawClock) {
+                statusText = "Sending...";
+            } else if (drawCheck2) {
+                statusText = "Delivered";
+            } else if (drawCheck1) {
+                statusText = "Sent";
+            } else if (drawError) {
+                statusText = "Failed...";
+            }
+            if (!statusText.isEmpty()) {
+                if (shouldDrawTimeOnMedia()) {
+                    if (currentMessageObject.shouldDrawWithoutBackground()) {
+                        Theme.chat_timePaint.setColor(getThemedColor(Theme.key_chat_serviceText));
+                        Theme.chat_timePaint.setAlpha((int) (255 * timeAlpha * alpha));
+                    } else {
+                        Theme.chat_timePaint.setColor(getThemedColor(Theme.key_chat_mediaSentClock));
+                        Theme.chat_timePaint.setAlpha((int) (255 * alpha));
+                    }
+                } else {
+                    Theme.chat_timePaint.setColor(getThemedColor(drawSelectionBackground ? Theme.key_chat_outSentClockSelected : Theme.key_chat_outSentClock));
+                    Theme.chat_timePaint.setAlpha((int) (255 * alpha));
+                }
+                float tw = Theme.chat_timePaint.measureText(statusText);
+                float tx;
+                if (shouldDrawTimeOnMedia()) {
+                    tx = layoutWidth - dp(bigRadius ? 24 : 22) - tw + offsetX;
+                    timeY += timeYOffset;
+                } else {
+                    tx = layoutWidth - dp(18.5f) - tw + offsetX;
+                    timeY = layoutHeight - dp(8.5f) + timeYOffset;
+                }
+                canvas.drawText(statusText, tx, timeY, Theme.chat_timePaint);
+                Theme.chat_timePaint.setAlpha(255);
+                invalidate();
+                return;
+            }
+        }
+
         if (drawClock) {
             MsgClockDrawable drawable = Theme.chat_msgClockDrawable;
             int color;

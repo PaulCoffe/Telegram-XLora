@@ -290,10 +290,8 @@ public class MeshChatActivity extends BaseFragment implements NotificationCenter
         if (mode == MODE_CHANNEL) {
             MeshManager.getInstance().sendChannelMessage(channelIndex, text);
         } else {
-            // Direct contact message — use channel 0 for now (Phase 6 will add proper DM)
-            FileLog.d("MeshChatActivity: DM send stub — text='" + text + "' to=" + contactPubKey);
-            // Save locally with is_out = true
-            MeshStorage.getInstance().saveContactMessage(contactPubKey, text, true);
+            // Direct contact message
+            MeshManager.getInstance().sendContactMessage(contactPubKey, text);
         }
 
         inputField.setText("");

@@ -254,6 +254,7 @@ public class MessageObject {
 
     public boolean isMesh;
     public int hops;
+    public int snr;
 
     public boolean isSpoilersRevealed;
     public boolean isMediaSpoilersRevealed;
@@ -1886,6 +1887,9 @@ public class MessageObject {
                     if (magic == 0x4D455348) { // "MESH" magic
                         isMesh = true;
                         hops = messageOwner.custom_params.readInt32(false);
+                        if (messageOwner.custom_params.limit() >= 12) {
+                            snr = messageOwner.custom_params.readInt32(false);
+                        }
                     }
                 }
             } catch (Exception ignore) {}
