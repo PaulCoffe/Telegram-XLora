@@ -124,16 +124,17 @@
 
 ## Phase 9 — QA & Hardware Testing
 
-- [ ] End-to-end test on Heltec T114 (fw ≥ 1.12.0):
-  - [ ] Handshake (SELF_INFO roundtrip)
-  - [ ] Channel list load (all 8 slots)
-  - [ ] Send message → PACKET_MSG_SENT + ACK
-  - [ ] Receive message (channel + DM)
-  - [ ] Offline queue: send while disconnected, flush on reconnect
-  - [ ] Reconnect after 30s idle
+- [x] End-to-end test on Heltec T114 (fw ≥ 1.12.0):
+  - [x] Handshake (SELF_INFO roundtrip)
+  - [x] Channel list load (all 8 slots)
+  - [x] Send message → PACKET_MSG_SENT + ACK
+  - [x] Receive message (channel + DM)
+  - [x] Offline queue: send while disconnected, flush on reconnect
+  - [x] Reconnect after 30s idle
 - [x] Logcat validation — no GATT_ERROR spam, no ANR
 - [x] Unread badge on Mesh folder icon
-- [x] "via Mesh" badge in message bubbles (SNR + hops)
+- [x] \"via Mesh\" badge in message bubbles (SNR + hops)
+- [x] 3-stage delivery status (Clock / Single Check / Double Check)
 
 ---
 
@@ -148,15 +149,35 @@
 
 ---
 
+## Phase 10 — UX Purification & Purity ✅ (Complete)
+
+- [x] Fixed binary name corruption (null-terminator parser in `MeshManager`)
+- [x] Refined folder filtering: `Mesh Channels` (Public only by default)
+- [x] Refined folder filtering: `Mesh Contacts` (Discovered nodes only)
+- [x] Redirected folder FAB click to `MeshSettingsActivity`
+- [x] Synchronization of project documentation (Architecture, Roadmap, History)
+
+---
+
+## Phase 11 — Real-time Node Discovery (ADVERT 0x80) ✅ (Complete)
+
+- [x] Implemented `parseAdvertisement(0x80)` in `MeshManager.java`
+- [x] Extracted RSSI/Hops telemetry from asynchronous broadcast packets
+- [x] Automated directory updates for new nodes appearing in the air
+- [x] Result: Immediate appearance of newly heard nodes in the "Mesh Contacts" folder.
+
+---
+
 ## Current Status
 
 | Component | Status |
 |-----------|--------|
 | BLE / GATT stack | ✅ Stable |
-| MeshStorage v4 | ✅ Stable |
+| MeshStorage v5 | ✅ Stable |
 | MeshTransportManager | ✅ Stable |
-| Virtual Mesh folder (UI) | ✅ Working |
-| Hybrid mode (TG ↔ LoRa) | ✅ Working |
-| Offline queue | ✅ Working |
+| Virtual Mesh folder (UI) | ✅ Stable & Filtered |
+| Hybrid mode (TG ↔ LoRa) | ✅ Stable |
+| Offline queue | ✅ Stable |
+| ADVERT Real-time Discovery| ✅ Success |
 | CI Build (`mesh-dev`) | ✅ Success |
-| Hardware QA (Heltec T114) | ⏳ Final Field Test |
+| Hardware QA (Heltec T114) | ✅ Final Field Test Success |

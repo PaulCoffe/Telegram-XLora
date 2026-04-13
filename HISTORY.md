@@ -1,5 +1,40 @@
 ---
 
+## [2026-04-13] Phase 14: Real-time Node Discovery (ADVERT 0x80) (mesh-dev)
+
+### Objective
+Enable automatic, real-time discovery of nearby LoRa nodes by parsing asynchronous broadcast announcements (ADVERT packets).
+
+### Changes
+1. **Parser Implementation**:
+   - Added `parseAdvertisement(byte[] data)` to `MeshManager.java`.
+   - Extracts RSSI (signal strength), Hops (distance), PubKeyPrefix, and optional Node Name.
+   - Automatically updates `MeshStorage` upon arrival of 0x80 packets.
+   - Hooked `PACKET_ADVERTISEMENT` in the main response dispatcher.
+2. **Result**:
+   - Nodes appearing in the mesh network now show up in the "Mesh Contacts" folder immediately, without requiring a manual sync or handshake.
+
+---
+
+## [2026-04-13] Phase 13: Mesh Folder Purification & Protocol Hardening (mesh-dev)
+
+### Objective
+Resolve the \"mess\" in Mesh folders by implementing strict category-based filtering and fixing binary data corruption in incoming packet parsing.
+
+### Changes
+1. **Name Purity & Parsing**:
+   - Refactored `MeshManager.java` with a `extractString()` helper that respects null-terminators (`0x00`).
+   - Fixes \"junk\" names like `Public&3\0eJ` where binary keys were appended due to buffer over-reads.
+2. **Folder Categorization**:
+   - **Mesh Channels (1493)**: Restructured `DialogsActivity.java` to show Slot 0 (Primary) always, and Slots 1-7 only if they contain valid user-defined names.
+   - **Mesh Contacts (1494)**: Redirected population logic to `MeshStorage.getMeshContacts()`, correctly listing all discovered nodes as virtual contact entries.
+3. **UX & Navigation**:
+   - **Contextual FAB**: Clicking the \"Add\" button while in a Mesh folder now opens the **Mesh Discovery/Settings** screen instead of standard Telegram contacts.
+4. **Documentation Sync**:
+   - Finalized **v10 Architecture** update and marked all UI stabilization goals as **Complete** in the Roadmap.
+
+---
+
 ## [2026-04-13] Phase 12: High-Fidelity UI & Message Lifecycle Completion (mesh-dev)
 
 ### Objective

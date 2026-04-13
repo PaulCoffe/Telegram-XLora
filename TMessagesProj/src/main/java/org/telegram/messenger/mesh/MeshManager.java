@@ -876,6 +876,7 @@ public class MeshManager {
                 break;
 
             case PACKET_ADVERTISEMENT:
+                parseAdvertisement(data);
                 break;
 
             case PACKET_ACK:
@@ -949,8 +950,7 @@ public class MeshManager {
             cr     = data[57] & 0xFF;
         }
         if (data.length > 58) {
-            name = new String(data, 58, data.length - 58, StandardCharsets.UTF_8)
-                    .replaceAll("\u0000", "").trim();
+            name = extractString(data, 58, data.length - 58);
         }
 
         FileLog.d(TAG + ": SELF_INFO name='" + name + "' pubkey=" + pubKeyHex.substring(0, Math.min(12, pubKeyHex.length())) + "... freq=" + freqHz + " bw=" + bwKHz + " sf=" + sf + " cr=" + cr);
@@ -987,10 +987,8 @@ public class MeshManager {
                 MeshStorage.getInstance().saveDevicePin(currentDeviceAddress, (int) blePin);
             }
             if (data.length >= 80) {
-                String model = new String(data, 20, 40, StandardCharsets.UTF_8)
-                        .replaceAll("\u0000", "").trim();
-                String version = new String(data, 60, 20, StandardCharsets.UTF_8)
-                        .replaceAll("\u0000", "").trim();
+                String model = extractString(data, 20, 40);
+                String version = extractString(data, 60, 20);
                 FileLog.d(TAG + ": Device model=" + model + " version=" + version);
             }
         }
@@ -1006,8 +1004,7 @@ public class MeshManager {
         String pubKeyHex = bytesToHex(Arrays.copyOfRange(data, 1, 7));
         String name = "";
         if (data.length > 8) {
-            name = new String(data, 8, data.length - 8, StandardCharsets.UTF_8)
-                    .replaceAll("\u0000", "").trim();
+            name = extractString(data, 8, data.length - 8);
         }
         FileLog.d(TAG + ": Contact pubkey=" + pubKeyHex + " name='" + name + "'");
         MeshStorage.getInstance().updateNode(pubKeyHex, name.isEmpty() ? null : name, 0, 0);
@@ -1025,8 +1022,7 @@ public class MeshManager {
             return;
         }
         int idx  = data[1] & 0xFF;
-        String name = new String(data, 2, 32, StandardCharsets.UTF_8)
-                .replaceAll("\u0000", "").trim();
+        String name = extractString(data, 2, 32);
 
         // Parse 16-byte secret (if present)
         String secretHex = MeshStorage.PUBLIC_CHANNEL_KEY_HEX; // default for slot 0
@@ -1098,6 +1094,31 @@ public class MeshManager {
                 l.onContactMessage(finalPubKey, finalText, finalTs, finalSnr, finalHops);
             }
         });
+    }
+
+    private void parseAdvertisement(byte[] data) {
+        // PACKET_ADVERTISEMENT (0x80) per companion_protocol.md:
+        // Byte 0: 0x80
+        // Byte 1: RSSI (signed)
+        // Byte 2: Hops (unsigned)
+        // Bytes 3-8: Public Key Prefix (6 bytes)
+        // Bytes 9+: Node name (UTF-8, optional)
+        if (data.length < 9) return;
+
+        int rssiRaw = data[1] & 0xFF;
+        int rssi = (rssiRaw < 128 ? rssiRaw : rssiRaw - 256);
+        int hops = data[2] & 0xFF;
+        String pubKeyHex = bytesToHex(Arrays.copyOfRange(data, 3, 9));
+
+        String name = "";
+        if (data.length > 9) {
+            name = extractString(data, 9, data.length - 9);
+        }
+
+        FileLog.d(TAG + ": ADVERT heard from " + pubKeyHex + " rssi=" + rssi + " hops=" + hops + " name='" + name + "'");
+
+        // Update storage — discovery in real-time
+        MeshStorage.getInstance().updateNode(pubKeyHex, name.isEmpty() ? null : name, rssi, hops);
     }
 
     private void parseChannelMessage(byte[] data) {
@@ -1492,6 +1513,16 @@ public class MeshManager {
         StringBuilder sb = new StringBuilder(bytes.length * 2);
         for (byte b : bytes) sb.append(String.format("%02x", b));
         return sb.toString();
+    }
+
+    private String extractString(byte[] data, int offset, int maxLen) {
+        if (offset >= data.length) return "";
+        int len = 0;
+        int limit = Math.min(maxLen, data.length - offset);
+        while (len < limit && data[offset + len] != 0) {
+            len++;
+        }
+        return new String(data, offset, len, StandardCharsets.UTF_8).trim();
     }
 
     public boolean isHandshakeCompleted() { return isHandshakeComplete; }

@@ -1,6 +1,6 @@
 # Telegram-XLora Architecture & MeshCore Integration
 
-> Last updated: 2026-04-13 — Protocol alignment v1.12.0+ | Final Stabilization v9 (UI & Lifecycle)
+> Last updated: 2026-04-13 — Protocol alignment v1.12.0+ | Final Stabilization v10 (UI & Lifecycle)
 
 ## 1. Overview
 Telegram-XLora is a custom Android client based on Forkgram that integrates **MeshCore LoRa** networking via Bluetooth LE. Users can communicate without internet using BLE-connected LoRa hardware (Heltec T114, LilyGO, etc.).
@@ -181,10 +181,15 @@ To match hardware ACKs to database records, `MeshManager` generates a 4-byte tok
 
 ---
 
-## 6. Mesh Folder (Virtual Dialog Folder)
-- `MessagesController.checkMeshFilter()` populates a virtual folder with synthetic dialogs
-- Each active LoRa channel slot → one synthetic "chat" entry
-- Each known unlinked contact → one synthetic "DM" entry
+### 6. Mesh Folders (Virtual Dialog Folders)
+- **Mesh Channels (1493)**: Populated via `MeshStorage.getLoraChannels()`.
+  - Slot 0 (Public) is always shown.
+  - Slots 1-7 are shown only if they have a non-empty, user-defined name.
+- **Mesh Contacts (1494)**: Populated via `MeshStorage.getMeshContacts()`.
+  - Shows all discovered LoRa nodes as virtual "contacts".
+- **Action Redirection**: The Floating Action Button (FAB) in these folders is redirected to `MeshSettingsActivity` for node/channel management.
+- Each active LoRa channel slot → one synthetic \"chat\" entry
+- Each known unlinked contact → one synthetic \"DM\" entry
 - Filter type: `DialogFilter` with `isMesh = true`
 
 ---
@@ -222,6 +227,8 @@ To match hardware ACKs to database records, `MeshManager` generates a 4-byte tok
 | 2026-04-10 | **v7** | **Connection Hardening & DM Routing**: Transitioned to direct-connect peer mapping, bypass auto-scan, restricted allowed BLE device names, and replaced channel 0 stub with true sendContactMessage logic. |
 | 2026-04-13 | **v8** | **Final Stabilization**: Implemented BOND_STATE_CHANGED handshake to fix GATT_ERROR 133, added UI telemetry (SNR/Hops) in chat bubbles, and performed final log pruning. |
 | 2026-04-13 | **v9** | **UI & Lifecycle Completion**: Implemented 3-stage delivery status (Pending/Sent/Delivered), synthetic history interception in `MessagesController`, deterministic ACK tokens, and network-unreachable error UI. |
+| 2026-04-13 | **v10** | **High-Fidelity UI & Folder Cleanup**: Fixed binary name corruption (null-terminator parser), refined Channels/Contacts folder filtering, and implemented contextual FAB actions. |
+| 2026-04-13 | **v11** | **Real-time Discovery (ADVERT)**: Implemented 0x80 packet parsing for asynchronous node announcements, enabling automatic directory updates without manual sync. |
 
 ---
 

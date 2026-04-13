@@ -4812,6 +4812,13 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     AccountFrozenAlert.show(currentAccount);
                     return;
                 }
+                if (viewPages != null && viewPages.length > 0) {
+                    int currentFilterId = viewPages[0].selectedType;
+                    if (currentFilterId == 1493 || currentFilterId == 1494 || currentFilterId == MessagesController.MESH_FILTER_ID) {
+                        presentFragment(new MeshSettingsActivity());
+                        return;
+                    }
+                }
                 openWriteContacts();
             }
         });
@@ -10931,30 +10938,58 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             MessagesController.DialogFilter dialogFilter = messagesController.selectedDialogFilter[dialogsType == 7 ? 0 : 1];
             if (dialogFilter == null) {
                 return messagesController.getDialogs(folderId);
-            } else if (dialogFilter.id == MessagesController.MESH_FILTER_ID) {
+            } else if (dialogFilter.id == MessagesController.MESH_FILTER_ID || dialogFilter.id == 1493 || dialogFilter.id == 1494) {
                 ArrayList<TLRPC.Dialog> meshDialogs = new ArrayList<>();
-                java.util.ArrayList<org.telegram.messenger.mesh.MeshStorage.LoraChannel> channels =
-                        org.telegram.messenger.mesh.MeshStorage.getInstance().getLoraChannels();
-                for (org.telegram.messenger.mesh.MeshStorage.LoraChannel channel : channels) {
-                    if (channel.name == null || channel.name.isEmpty()) continue; // skip uninitialized slots
-                    org.telegram.messenger.mesh.MeshDialog meshDialog = new org.telegram.messenger.mesh.MeshDialog();
-                    meshDialog.id = org.telegram.messenger.mesh.MeshStorage.channelDialogId(channel.slotIndex);
-                    meshDialog.top_message = 0;
-                    meshDialog.unread_count = 0;
-                    meshDialog.meshName = channel.name;
-                    meshDialog.lastMessage = org.telegram.messenger.mesh.MeshStorage.getInstance()
-                            .getLastChannelMessageText(channel.slotIndex);
-                    meshDialogs.add(meshDialog);
+                
+                // --- MESH CHANNELS (Folder 1493) ---
+                if (dialogFilter.id == 1493 || dialogFilter.id == MessagesController.MESH_FILTER_ID) {
+                    java.util.ArrayList<org.telegram.messenger.mesh.MeshStorage.LoraChannel> channels =
+                            org.telegram.messenger.mesh.MeshStorage.getInstance().getLoraChannels();
+                    for (org.telegram.messenger.mesh.MeshStorage.LoraChannel channel : channels) {
+                        // FIX: Show slot 0 (Public) always; slots 1-7 only if they have a non-empty name
+                        if (channel.slotIndex != 0 && (channel.name == null || channel.name.isEmpty())) continue;
+                        
+                        org.telegram.messenger.mesh.MeshDialog meshDialog = new org.telegram.messenger.mesh.MeshDialog();
+                        meshDialog.id = org.telegram.messenger.mesh.MeshStorage.channelDialogId(channel.slotIndex);
+                        meshDialog.meshName = (channel.name == null || channel.name.isEmpty()) ? "Public" : channel.name;
+                        meshDialog.channelSlot = channel.slotIndex;
+                        meshDialog.lastMessage = org.telegram.messenger.mesh.MeshStorage.getInstance()
+                                .getLastChannelMessageText(channel.slotIndex);
+                        
+                        meshDialogs.add(meshDialog);
+                        messagesController.dialogs_dict.put(meshDialog.id, meshDialog);
 
-                    // Cache the dialog so DialogCell can find it
-                    messagesController.dialogs_dict.put(meshDialog.id, meshDialog);
-
-                    // Create/update mock chat for name display
-                    TLRPC.TL_chat chat = new TLRPC.TL_chat();
-                    chat.id = meshDialog.id;
-                    chat.title = channel.name;
-                    messagesController.putChat(chat, false);
+                        TLRPC.TL_chat chat = new TLRPC.TL_chat();
+                        chat.id = meshDialog.id;
+                        chat.title = meshDialog.meshName;
+                        messagesController.putChat(chat, false);
+                    }
                 }
+                
+                // --- MESH CONTACTS (Folder 1494) ---
+                if (dialogFilter.id == 1494 || dialogFilter.id == MessagesController.MESH_FILTER_ID) {
+                    java.util.ArrayList<org.telegram.messenger.mesh.MeshStorage.MeshContact> contacts =
+                            org.telegram.messenger.mesh.MeshStorage.getInstance().getMeshContacts();
+                    for (org.telegram.messenger.mesh.MeshStorage.MeshContact contact : contacts) {
+                        org.telegram.messenger.mesh.MeshDialog meshDialog = new org.telegram.messenger.mesh.MeshDialog();
+                        meshDialog.id = org.telegram.messenger.mesh.MeshStorage.contactDialogId(contact.pubKeyHex);
+                        meshDialog.meshName = (contact.name == null || contact.name.isEmpty()) ? ("Node " + contact.pubKeyHex.substring(0, Math.min(6, contact.pubKeyHex.length()))) : contact.name;
+                        meshDialog.pubKeyHex = contact.pubKeyHex;
+                        meshDialog.lastMessage = org.telegram.messenger.mesh.MeshStorage.getInstance()
+                                .getLastContactMessageText(contact.pubKeyHex);
+                        
+                        meshDialogs.add(meshDialog);
+                        messagesController.dialogs_dict.put(meshDialog.id, meshDialog);
+                        
+                        // For contacts, we put a mock USER instead of CHAT
+                        TLRPC.TL_user user = new TLRPC.TL_user();
+                        user.id = meshDialog.id;
+                        user.first_name = meshDialog.meshName;
+                        user.access_hash = 0; // synthetic
+                        messagesController.putUser(user, false);
+                    }
+                }
+                
                 return meshDialogs;
             } else {
                 if (initialDialogsType == DIALOGS_TYPE_FORWARD) {
