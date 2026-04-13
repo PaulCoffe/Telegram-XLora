@@ -18,3 +18,12 @@
 [submodule "TMessagesProj/jni/tde2e_source"]
 	path = TMessagesProj/jni/tde2e_source
 	url = https://github.com/tdlib/td
+[submodule "meshcore_android_ref"]
+	path = meshcore_android_ref
+	url = https://github.com/mintylinux/Meshcore-Wardrive-Android
+[submodule "meshcore_android_source"]
+	path = meshcore_android_source
+	url = https://github.com/mintylinux/Meshcore-Wardrive-Android-Source
+[submodule "meshcore_ref"]
+	path = meshcore_ref
+	url = https://github.com/meshcore-dev/MeshCore
