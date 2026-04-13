@@ -1,6 +1,6 @@
 # Telegram-XLora Architecture & MeshCore Integration
 
-> Last updated: 2026-04-10 — Protocol alignment v1.12.0+
+> Last updated: 2026-04-13 — Protocol alignment v1.12.0+ | Final Stabilization v8
 
 ## 1. Overview
 Telegram-XLora is a custom Android client based on Forkgram that integrates **MeshCore LoRa** networking via Bluetooth LE. Users can communicate without internet using BLE-connected LoRa hardware (Heltec T114, LilyGO, etc.).
@@ -24,7 +24,8 @@ Telegram-XLora is a custom Android client based on Forkgram that integrates **Me
 3. Discover services & characteristics
 4. Request MTU 512
 5. Enable notifications on TX characteristic (descriptor 0x2902)
-6. Send `CMD_APP_START (0x01)` → await `PACKET_SELF_INFO (0x05)`
+6. **Wait for BOND_BONDED** (via `BroadcastReceiver`) before GATT setup to prevent connection drops.
+7. Send `CMD_APP_START (0x01)` → await `PACKET_SELF_INFO (0x05)`
 7. Send `CMD_DEVICE_QUERY (0x16 0x03)` → await `PACKET_DEVICE_INFO (0x0D)`
 8. Send `CMD_SET_DEVICE_TIME (0x09)`
 9. Send `CMD_GET_CHANNEL (0x1F)` × 8 (slots 0-7) → collect `PACKET_CHANNEL_INFO (0x12)`
@@ -41,6 +42,7 @@ Telegram-XLora is a custom Android client based on Forkgram that integrates **Me
 - `WriteQueue` — serialized command execution; only one command in-flight at a time with 5s timeout
 - All listener callbacks dispatched on the **main thread** via `handler.post()`
 - MTU 512 requested after service discovery
+- **Bonding-first sequence**: GATT connection is deferred until the system confirms the device is bonded to ensure encrypted characteristic access.
 
 **Listener interface** (`MeshManagerListener`):
 ```java
@@ -155,7 +157,7 @@ CREATE TABLE device_pins (
 ## 5. Hybrid Chat Logic (Phase 2 — Planned)
 - **Identity Linking**: Users link a Mesh pubkey to a Telegram User ID via `MeshStorage.linkNodeToUser()`
 - **Metadata Persistence**: Mesh-specific data (hops, SNR) will be embedded in `TLRPC.Message.custom_params` using magic `0x4D455348` ("MESH")
-- **UI Rendering**: `ChatMessageCell` detects magic header and renders "via Mesh" indicator + hop count badge
+- **UI Rendering**: `ChatMessageCell` detects magic header and renders technical aesthetic (Neon Green, corner markers) + "via Mesh" indicator + hop count & SNR telemetry footer.
 
 ---
 
@@ -197,7 +199,8 @@ CREATE TABLE device_pins (
 | 2026-04-09 | v4 | MeshForegroundService; MeshSettingsActivity; channel presets |
 | 2026-04-10 | **v5** | **Protocol alignment phase 1**: typed callbacks, DB v3, lora_channels, public channel key seeding |
 | 2026-04-10 | **v6** | **Protocol alignment phase 2**: CMD_SET_RADIO_PARAMS(0x0B), CMD_SEND_TXT_MSG(0x02) packet mapping, and BLE Passkey Entry native UI fixes. |
-| 2026-04-13 | **v7** | **Connection Hardening & DM Routing**: Transitioned to direct-connect peer mapping, bypass auto-scan, restricted allowed BLE device names, and replaced channel 0 stub with true sendContactMessage logic. |
+| 2026-04-10 | **v7** | **Connection Hardening & DM Routing**: Transitioned to direct-connect peer mapping, bypass auto-scan, restricted allowed BLE device names, and replaced channel 0 stub with true sendContactMessage logic. |
+| 2026-04-13 | **v8** | **Final Stabilization**: Implemented BOND_STATE_CHANGED handshake to fix GATT_ERROR 133, added UI telemetry (SNR/Hops) in chat bubbles, and performed final log pruning. |
 
 ---
 

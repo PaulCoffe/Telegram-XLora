@@ -1,6 +1,6 @@
 # Telegram-XLora — Project Roadmap
 
-> Last updated: 2026-04-10
+> Last updated: 2026-04-13
 > Branch: `mesh-dev` | Protocol: MeshCore companion_protocol.md v1.12.0+
 
 ---
@@ -131,9 +131,9 @@
   - [ ] Receive message (channel + DM)
   - [ ] Offline queue: send while disconnected, flush on reconnect
   - [ ] Reconnect after 30s idle
-- [ ] Logcat validation — no GATT_ERROR spam, no ANR
-- [ ] Unread badge on Mesh folder icon
-- [ ] "via Mesh" badge in message bubbles (SNR + hops)
+- [x] Logcat validation — no GATT_ERROR spam, no ANR
+- [x] Unread badge on Mesh folder icon
+- [x] "via Mesh" badge in message bubbles (SNR + hops)
 
 ---
 
@@ -158,5 +158,5 @@
 | Virtual Mesh folder (UI) | ✅ Working |
 | Hybrid mode (TG ↔ LoRa) | ✅ Working |
 | Offline queue | ✅ Working |
-| CI Build (`mesh-dev`) | ✅ Triggered |
-| Hardware QA (Heltec T114) | ⏳ Pending |
+| CI Build (`mesh-dev`) | ✅ Success |
+| Hardware QA (Heltec T114) | ⏳ Final Field Test |

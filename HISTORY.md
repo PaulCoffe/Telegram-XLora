@@ -1,5 +1,24 @@
 # DEVELOPMENT HISTORY
 
+## [2026-04-13] Phase 11: Final Stabilization & UI Overhaul (mesh-dev)
+
+### Objective
+Finalize the MeshCore integration by hardening the BLE handshake sequence against Android-specific bonding edge cases and completing the high-fidelity technical UI for Mesh-enabled messages.
+
+### Changes
+1. **BLE Handshake Stabilization**:
+   - Implemented `BroadcastReceiver` for `ACTION_BOND_STATE_CHANGED` in `MeshManager.java`.
+   - Hardened `connectToDevice()` to defer `connectGatt()` until `BOND_BONDED` is confirmed, fixing persistent `GATT_ERROR 133` on modern Android versions.
+   - Performed final log pruning in `MeshManager.java` to eliminate GATT noise while preserving error visibility.
+2. **UI Implementation & Telemetry**:
+   - **DialogCell**: Integrated Mesh radio tower indicator in the chat list.
+   - **ChatMessageCell**: Implemented "Neon Green on Dark" aesthetic with technical corner markers and neon borders.
+   - **Message Footer**: Added real-time telemetry rendering (SNR & Hops count) in the message status area using a monospaced font and custom radio icon.
+3. **Build & CI**:
+   - Triggered production build via GitHub Actions for `mesh-dev` branch.
+
+---
+
 ## [2026-04-13] Phase 10: Connection Hardening & Direct Messages (mesh-dev)
 
 ### Objective
