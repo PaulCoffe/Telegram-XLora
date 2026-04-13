@@ -1,5 +1,22 @@
 # DEVELOPMENT HISTORY
 
+## [2026-04-13] Phase 10: Connection Hardening & Direct Messages (mesh-dev)
+
+### Objective
+Eliminate "ghost" BLE connections by refining the scanner and lifecycle logic, and transition from stubbed P2P logic to true direct messaging.
+
+### Changes
+1. **BLE Scanner & Connection Lifecycle**:
+   - Bypassed automatic scanning on app startup and background service resumption. Used `autoConnectToSavedDevice()` to silently attempt reconnecting to the last paired node without firing general intent scans.
+   - Restricted `isMeshCoreDevice()` to exact keyword matches (`meshcore`, `drip`, `heltec`, `lilygo`) to prevent false-positive connections with random BLE hardware.
+   - Hardened `MeshManager.stopAll()` to explicitly and synchronously reset state trackers (`gattErrorStreak`, `reconnectAttempts` to `0`), severing zombie reconnect cyclic loops.
+2. **Direct Messaging (DM) Implementation**:
+   - Refactored `MeshChatActivity` to use `MeshManager.getInstance().sendContactMessage()`, bypassing the old `channel 0` testing stub to send targeted encrypted payload blocks using target Public Keys.
+3. **UI Finalization**:
+   - Added `ChatMessageCell` status updates replacing Telegram default loops with explicit Mesh telemetry ("Sending...", "Delivered", along with Route Hops & SNR stats).
+
+---
+
 ## [2026-04-10] Phase 9: Wireless Protocol Alignment & Dynamic Pairing (mesh-dev)
 
 ### Objective

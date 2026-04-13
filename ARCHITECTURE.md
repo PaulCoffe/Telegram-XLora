@@ -197,6 +197,7 @@ CREATE TABLE device_pins (
 | 2026-04-09 | v4 | MeshForegroundService; MeshSettingsActivity; channel presets |
 | 2026-04-10 | **v5** | **Protocol alignment phase 1**: typed callbacks, DB v3, lora_channels, public channel key seeding |
 | 2026-04-10 | **v6** | **Protocol alignment phase 2**: CMD_SET_RADIO_PARAMS(0x0B), CMD_SEND_TXT_MSG(0x02) packet mapping, and BLE Passkey Entry native UI fixes. |
+| 2026-04-13 | **v7** | **Connection Hardening & DM Routing**: Transitioned to direct-connect peer mapping, bypass auto-scan, restricted allowed BLE device names, and replaced channel 0 stub with true sendContactMessage logic. |
 
 ---
 
