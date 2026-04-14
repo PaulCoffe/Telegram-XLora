@@ -1,6 +1,6 @@
 # Telegram-XLora Architecture & MeshCore Integration
 
-> Last updated: 2026-04-13 — Protocol alignment v1.12.0+ | Final Stabilization v10 (UI & Lifecycle)
+> Last updated: 2026-04-14 — Protocol alignment v1.12.0+ | Final Stabilization v12 (Hardening)
 
 ## 1. Overview
 Telegram-XLora is a custom Android client based on Forkgram that integrates **MeshCore LoRa** networking via Bluetooth LE. Users can communicate without internet using BLE-connected LoRa hardware (Heltec T114, LilyGO, etc.).
@@ -211,6 +211,7 @@ To match hardware ACKs to database records, `MeshManager` generates a 4-byte tok
 | `MeshStorageQueue` | All SQLite writes and reads that could block |
 
 **Rule**: Never perform SQLite reads/writes on the GATT callback or main thread directly.
+**Stability**: `MeshManager` uses `CopyOnWriteArrayList` for internal collections (listeners, discovered devices) to ensure thread-safety during asynchronous GATT events.
 
 ---
 
@@ -229,6 +230,8 @@ To match hardware ACKs to database records, `MeshManager` generates a 4-byte tok
 | 2026-04-13 | **v9** | **UI & Lifecycle Completion**: Implemented 3-stage delivery status (Pending/Sent/Delivered), synthetic history interception in `MessagesController`, deterministic ACK tokens, and network-unreachable error UI. |
 | 2026-04-13 | **v10** | **High-Fidelity UI & Folder Cleanup**: Fixed binary name corruption (null-terminator parser), refined Channels/Contacts folder filtering, and implemented contextual FAB actions. |
 | 2026-04-13 | **v11** | **Real-time Discovery (ADVERT)**: Implemented 0x80 packet parsing for asynchronous node announcements, enabling automatic directory updates without manual sync. |
+| 2026-04-14 | **v12** | **Build Stabilization & Hardening**: Fixed JNI configurations, resolved naming conflicts in `MessagesController`, and implemented thread-safe collections in `MeshManager`. |
+
 
 ---
 

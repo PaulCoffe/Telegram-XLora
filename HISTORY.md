@@ -1,5 +1,28 @@
 ---
 
+## [2026-04-14] Phase 15: Build Pipeline Stabilization & Core Hardening (mesh-dev)
+
+### Objective
+Resolve persistent CI/CD build failures caused by JNI conflicts and symbol naming mismatches, and harden the core BLE logic for production-grade stability.
+
+### Changes
+1. **Build System Fixes**:
+   - **JNI Configuration**: Restored `jniLibs.srcDirs = ["src/main/jni"]` in `TMessagesProj_App/build.gradle`.
+   - **Conflict Resolution**: Added `packagingOptions` to exclude `CVS` metadata files (`jni/CVS/*`), fixing the "duplicate files during APK merge" error.
+   - **Symbol Normalization**: Resolved a naming conflict in `MessagesController.java` where `dialogMessage` (singular) was inconsistently used, ensuring compatibility with `TranslateController.java`.
+2. **Core Hardening**:
+   - **Thread-Safety**: Switched `ArrayList` to `CopyOnWriteArrayList` in `MeshManager.java` for listeners and discovered device lists to prevent `ConcurrentModificationException`.
+   - **Null-Safety**: Added robust null checks in GATT callbacks (`onConnectionStateChange`, `onServicesDiscovered`) to prevent crashes during connection drops.
+3. **Multi-Agent Protocol**:
+   - Integrated `AGENTS.md` v7.3 to streamline collaborative development and remote log analysis.
+
+### Result
+- Stable CI/CD pipeline restored on `mesh-dev`.
+- Crash-resistant BLE lifecycle implementation.
+- Consistent naming convention across Telegram and Mesh logic.
+
+---
+
 ## [2026-04-13] Phase 14: Real-time Node Discovery (ADVERT 0x80) (mesh-dev)
 
 ### Objective

@@ -168,16 +168,27 @@
 
 ---
 
+## Phase 12 — Build Reliability & Thread-Safety ✅ (Complete)
+
+- [x] Restored correct `jniLibs` configuration in Gradle
+- [x] Implemented `packagingOptions` to exclude CVS metadata and fix APK merge conflicts
+- [x] Normalized `dialogMessage` (singular) naming across `MessagesController` and `TranslateController`
+- [x] Migrated `MeshManager` to `CopyOnWriteArrayList` for thread-safe listener/device management
+- [x] Hardened GATT callbacks with exhaustive null-safety
+
+---
+
 ## Current Status
 
 | Component | Status |
 |-----------|--------|
-| BLE / GATT stack | ✅ Stable |
+| BLE / GATT stack | ✅ Production-Grade |
 | MeshStorage v5 | ✅ Stable |
 | MeshTransportManager | ✅ Stable |
 | Virtual Mesh folder (UI) | ✅ Stable & Filtered |
 | Hybrid mode (TG ↔ LoRa) | ✅ Stable |
 | Offline queue | ✅ Stable |
 | ADVERT Real-time Discovery| ✅ Success |
-| CI Build (`mesh-dev`) | ✅ Success |
+| CI Build (`mesh-dev`) | ✅ Fixed & Stable |
 | Hardware QA (Heltec T114) | ✅ Final Field Test Success |
+
