@@ -133,7 +133,7 @@ public class MeshSettingsActivity extends BaseFragment
         items.add(UItem.asButton(ID_SCAN,
                 MeshManager.getInstance().isScanning() ? "Остановить поиск" : "Поиск устройств MeshCore", "").accent());
 
-        ArrayList<String> foundDevices = MeshManager.getInstance().getFoundDevices();
+        List<String> foundDevices = MeshManager.getInstance().getFoundDevices();
         if (!foundDevices.isEmpty()) {
             items.add(UItem.asHeader("Найденные устройства"));
             for (int i = 0; i < foundDevices.size(); i++) {
@@ -187,7 +187,7 @@ public class MeshSettingsActivity extends BaseFragment
             refreshList();
 
         } else if (id >= ID_DEVICE_BASE && id < ID_SCAN) {
-            ArrayList<String> devices = MeshManager.getInstance().getFoundDevices();
+            List<String> devices = MeshManager.getInstance().getFoundDevices();
             int idx = id - ID_DEVICE_BASE;
             if (idx >= 0 && idx < devices.size()) {
                 String entry = devices.get(idx);

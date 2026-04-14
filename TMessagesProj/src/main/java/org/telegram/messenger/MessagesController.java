@@ -12186,7 +12186,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         continue;
                     }
                     if (!DialogObject.isEncryptedDialog(dialog.id) && dialog.top_message > 0) {
-                        ArrayList<MessageObject> dialogMessagesList = dialogMessage.get(dialog.id);
+                        ArrayList<MessageObject> dialogMessagesList = dialogMessages.get(dialog.id);
                         MessageObject lastMessage = null;
                         if (dialogMessagesList != null) {
                             for (int i = 0; i < dialogMessagesList.size(); ++i) {
@@ -20252,7 +20252,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     long dialogId = DialogObject.makeEncryptedDialogId(key);
                     TLRPC.Dialog dialog = dialogs_dict.get(dialogId);
                     if (dialog != null) {
-                        ArrayList<MessageObject> dialogMessagesList = dialogMessage.get(dialogId);
+                        ArrayList<MessageObject> dialogMessagesList = dialogMessages.get(dialogId);
                         if (dialogMessagesList != null) {
                             for (int i = 0; i < dialogMessagesList.size(); ++i) {
                                 MessageObject message = dialogMessagesList.get(i);
