@@ -1,6 +1,6 @@
 # Telegram-XLora Architecture & MeshCore Integration
 
-> Last updated: 2026-04-14 — Protocol alignment v1.12.0+ | Final Stabilization v13 (UCF-Enabled)
+> Last updated: 2026-04-14 — Protocol alignment v1.12.0+ | Final Stabilization v15 (Global Standard)
 
 ## 1. Overview
 Telegram-XLora is a custom Android client based on Forkgram that integrates **MeshCore LoRa** networking via Bluetooth LE. Users can communicate without internet using BLE-connected LoRa hardware (Heltec T114, LilyGO, etc.).
@@ -164,7 +164,7 @@ CREATE TABLE device_pins (
 ## 5. Hybrid Chat Logic & UI Integration
 
 ### 5.1 Synthetic ID Routing
-The `MessagesController` intercepts `loadMessagesInternal()` for dialog IDs < -2,000,000,000. It redirects history fetching to `MeshStorage.getMessages()`, wrapping the results into standard `MessageObject` instances with `isMesh = true`. This allows Mesh chats to coexist seamlessly with Telegram chats.
+The `MessagesController` intercepts `loadMessagesInternal()` for dialog IDs < -2,000,000,000. It redirects history fetching to `MeshStorage.getMessages()`, wrapping the results into standard `MessageObject` instances with `isMesh = true` and storing them in the consistently named `dialogMessages` plural field. This standardized naming convention ensures seamless coexistence with Telegram chats and prevents compilation mismatches across the codebase.
 
 ### 5.2 Message Delivery Lifecycle (3 Stages)
 We map the `status` column from `MeshStorage` to standard Telegram status icons in `ChatMessageCell.createStatusDrawableParams()`:
@@ -244,6 +244,7 @@ To maximize character capacity for Cyrillic text over LoRa (which has a strict ~
 | 2026-04-13 | **v10** | **High-Fidelity UI & Folder Cleanup**: Fixed binary name corruption (null-terminator parser), refined Channels/Contacts folder filtering, and implemented contextual FAB actions. |
 | 2026-04-13 | **v11** | **Real-time Discovery (ADVERT)**: Implemented 0x80 packet parsing for asynchronous node announcements, enabling automatic directory updates without manual sync. |
 | 2026-04-14 | **v12** | **Build Stabilization & Hardening**: Fixed JNI configurations, resolved naming conflicts in `MessagesController`, and implemented thread-safe collections in `MeshManager`. |
+| 2026-04-14 | **v13** | **Global Standardization**: Systematically renamed `dialogMessage` to `dialogMessages` across the entire project (Storage, Controllers, UI) to eliminate build mismatches. |
 
 
 ---

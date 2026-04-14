@@ -1,6 +1,6 @@
 # Telegram-XLora — Project Roadmap
 
-> Last updated: 2026-04-13
+> Last updated: 2026-04-14
 > Branch: `mesh-dev` | Protocol: MeshCore companion_protocol.md v1.12.0+
 
 ---
@@ -188,7 +188,16 @@
 
 ---
 
-## Current Status
+## Phase 14 — Global Naming Standardization & Final Build Stabilization ✅ (Complete)
+
+- [x] Systematically renamed singular `dialogMessage` to `dialogMessages` in all storage and controller references.
+- [x] Updated method signatures in `MessagesStorage` for consistency.
+- [x] Resolved internal naming mismatches in `MessagesController` (`resetDialogs` / `processLoadedDialogs`).
+- [x] Verified zero remaining singular field references via global static analysis.
+- [x] Stabilized CI/CD pipeline on `mesh-dev` branch.
+
+
+## Current Status (2026-04-14)
 
 | Component | Status |
 |-----------|--------|

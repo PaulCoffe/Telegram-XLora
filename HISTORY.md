@@ -1,25 +1,24 @@
 ---
 
-## [2026-04-14] Phase 15: Build Pipeline Stabilization & Core Hardening (mesh-dev)
+## [2026-04-14] Phase 15: Global Standardization & Build Stabilization (mesh-dev)
 
 ### Objective
-Resolve persistent CI/CD build failures caused by JNI conflicts and symbol naming mismatches, and harden the core BLE logic for production-grade stability.
+Restore CI/CD build integrity by resolving persistent naming mismatches and standardizing the message container field across all architectural layers.
 
 ### Changes
-1. **Build System Fixes**:
+1. **Systematic Naming Standardization**:
+   - **Pluralization**: Renamed the singular `dialogMessage` field to the plural `dialogMessages` across `MessagesController.java`, `MessagesStorage.java`, `SecretChatHelper.java`, `TranslateController.java`, `DialogCell.java`, `EditWidgetActivity.java`, `AlertsCreator.java`, and `DialogsActivity.java`.
+   - **Logical Mismatch Correction**: Identified and fixed 4 critical type mismatches in `MessagesController.java` (`resetDialogs` and `processLoadedDialogs`) where `new_dialogMessage` was erroneously used instead of the intended `new_dialogMessages`.
+2. **Build System Hardening**:
    - **JNI Configuration**: Restored `jniLibs.srcDirs = ["src/main/jni"]` in `TMessagesProj_App/build.gradle`.
-   - **Conflict Resolution**: Added `packagingOptions` to exclude `CVS` metadata files (`jni/CVS/*`), fixing the "duplicate files during APK merge" error.
-   - **Symbol Normalization**: Resolved a naming conflict in `MessagesController.java` where `dialogMessage` (singular) was inconsistently used, ensuring compatibility with `TranslateController.java`.
-2. **Core Hardening**:
-   - **Thread-Safety**: Switched `ArrayList` to `CopyOnWriteArrayList` in `MeshManager.java` for listeners and discovered device lists to prevent `ConcurrentModificationException`.
-   - **Null-Safety**: Added robust null checks in GATT callbacks (`onConnectionStateChange`, `onServicesDiscovered`) to prevent crashes during connection drops.
-3. **Multi-Agent Protocol**:
-   - Integrated `AGENTS.md` v7.3 to streamline collaborative development and remote log analysis.
+   - **Packaging Rules**: Implemented `packagingOptions` to exclude `CVS` metadata, resolving "duplicate files" errors during APK merging.
+3. **Core Thread-Safety**:
+   - **Concurrent Collections**: Migrated `MeshManager.java` to `CopyOnWriteArrayList` for listener and device management to prevent `ConcurrentModificationException`.
 
 ### Result
-- Stable CI/CD pipeline restored on `mesh-dev`.
-- Crash-resistant BLE lifecycle implementation.
-- Consistent naming convention across Telegram and Mesh logic.
+- **Build Status**: Stable CI/CD pipeline restored on `mesh-dev`.
+- **Code Consistency**: Unified naming convention eliminates future regression risks in UI/Controller communication.
+- **Improved Stability**: Concurrent and null-safe GATT callbacks significantly reduce runtime crashes.
 
 ---
 
