@@ -1,5 +1,26 @@
 ---
 
+## [2026-04-14] Phase 17: Rebranding Consolidation & CI/CD Restoration (mesh-dev)
+
+### Objective
+Finalize the application renaming to **Telegram-XLora** across localized resources and restore the GitHub CI/CD pipeline by resolving a critical syntax error in `DialogCell.java`.
+
+### Changes
+1.  **Build System Stabilization**:
+    *   **Syntax Fix**: Identified and resolved a compilation failure in `DialogCell.java` caused by a misplaced `isMeshDialog` method and broken brace structure in the `update()` method.
+    *   **Relocation**: Moved `isMeshDialog` to a private helper scope at the end of the class.
+2.  **Identity & Rebranding**:
+    *   **Naming Finalization**: Confirmed and synchronized `AppName`, `AppNameBeta`, and `AppNameFdroid` as **Telegram-XLora** in English, Russian, Ukrainian, German, Spanish, Italian, Portuguese, and Dutch localization files.
+    *   **Scope Refinement**: Explicitly excluded non-target languages (Arabic, Korean) from name changes as per user preference.
+3.  **UI/UX Preservation**:
+    *   **Logo Task Deferral**: Deferring the logo replacement task to maintain project momentum and stability for the current release.
+
+### Result
+*   **Build Integrity**: The `mesh-dev` branch now hosts a valid, compilable codebase suitable for APK generation.
+*   **Brand Alignment**: The application is consistently branded as Telegram-XLora in the primary user-facing regions.
+
+---
+
 ## [2026-04-14] Phase 16: Maintenance Protocol Implementation (mesh-dev)
 
 ### Objective

@@ -217,6 +217,21 @@
 - [x] **UI Purification**: Pruned redundant dot-menus in system-managed Mesh folders to reduce UI cognitive load.
 - [x] **Persistence**: Real-time DB synchronization for node metadata (RSSI/Hops) from ADVERT packets.
 
+---
+
+## Phase 17 — Rebranding & CI/CD Restoration ✅ (Complete)
+
+- [x] Fixed critical syntax error in `DialogCell.java` (misplaced method and braces)
+- [x] Renamed `AppName` to **Telegram-XLora** in English (`values`)
+- [x] Renamed `AppName` to **Telegram-XLora** in Russian (`values-ru`)
+- [x] Renamed `AppName` to **Telegram-XLora** in Ukrainian (`values-uk`)
+- [x] Renamed `AppName` to **Telegram-XLora** in German (`values-de`)
+- [x] Renamed `AppName` to **Telegram-XLora** in Spanish (`values-es`)
+- [x] Renamed `AppName` to **Telegram-XLora** in Italian (`values-it`)
+- [x] Renamed `AppName` to **Telegram-XLora** in Portuguese (`values-pt-rBR`)
+- [x] Renamed `AppName` to **Telegram-XLora** in Dutch (`values-nl`)
+- [x] Triggered automated build on `mesh-dev`
+
 ## Current Status (2026-04-14)
 
 | Component | Status |
@@ -233,4 +248,5 @@
 | CI Build (`mesh-dev`) | ✅ Fixed & Stable |
 | Maintenance Protocol | ✅ Active |
 | Hardware QA (Heltec T114) | ✅ Final Field Test Success |
+| Rebranding | ✅ Telegram-XLora Finalized |
 

@@ -3451,13 +3451,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 }
             }
         }
-    }
-
-    private boolean isMeshDialog(long id) {
-        return id <= -2000000000L;
-    }
-
-            if (animated && (oldUnreadCount != unreadCount || oldMarkUnread != markUnread) && (!isDialogCell || (System.currentTimeMillis() - lastDialogChangedTime) > 100)) {
+        if (animated && (oldUnreadCount != unreadCount || oldMarkUnread != markUnread) && (!isDialogCell || (System.currentTimeMillis() - lastDialogChangedTime) > 100)) {
                 if (countAnimator != null) {
                     countAnimator.cancel();
                 }
@@ -6378,5 +6372,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     @Override
     protected boolean allowCaching() {
         return rightFragmentOpenedProgress <= 0;
+    }
+
+    private boolean isMeshDialog(long id) {
+        return id <= -2000000000L;
     }
 }
