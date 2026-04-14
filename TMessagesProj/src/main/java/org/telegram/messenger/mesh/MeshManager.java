@@ -35,7 +35,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * MeshManager handles BLE communication with MeshCore devices (Heltec T114, LilyGO etc.)
@@ -127,8 +127,8 @@ public class MeshManager {
 
     private String currentDeviceAddress;
 
-    private final ArrayList<BluetoothDevice>        foundDevices = new ArrayList<>();
-    private final ArrayList<MeshManagerListener>    listeners    = new ArrayList<>();
+    private final CopyOnWriteArrayList<BluetoothDevice>     foundDevices = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<MeshManagerListener> listeners    = new CopyOnWriteArrayList<>();
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     // ---- Listener ----
@@ -440,7 +440,7 @@ public class MeshManager {
         return (name != null && !name.isEmpty()) ? name : "Mesh Device";
     }
 
-    public ArrayList<String> getFoundDevices() {
+    public List<String> getFoundDevices() {
         ArrayList<String> result = new ArrayList<>();
         for (BluetoothDevice d : foundDevices) {
             result.add(getDeviceName(d) + "\n" + d.getAddress());
@@ -576,6 +576,7 @@ public class MeshManager {
 
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
+            if (gatt == null) return;
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 FileLog.d(TAG + ": GATT connected [status=" + status + "], discovering services...");
                 isConnected = true;
@@ -630,6 +631,7 @@ public class MeshManager {
 
         @Override
         public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+            if (gatt == null) return;
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 FileLog.e(TAG + ": Service discovery failed, status=" + status);
                 return;
@@ -650,6 +652,7 @@ public class MeshManager {
 
         @Override
         public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
+            if (gatt == null) return;
             // Step 3: Enable TX notifications via CCCD descriptor
             BluetoothGattService service = gatt.getService(UART_SERVICE_UUID);
             if (service != null) enableTxNotifications(gatt, service);
@@ -657,6 +660,7 @@ public class MeshManager {
 
         @Override
         public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
+            if (gatt == null || descriptor == null) return;
             if (!CCCD_UUID.equals(descriptor.getUuid())) return;
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 // Step 4: Send CMD_APP_START — MUST be 8+ bytes: [0x01, 0x00 x7, app_name_UTF8]
@@ -670,6 +674,7 @@ public class MeshManager {
 
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+            if (gatt == null || characteristic == null) return;
             isWriting = false;
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 FileLog.e(TAG + ": Write failed, status=" + status);
@@ -681,6 +686,7 @@ public class MeshManager {
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
+            if (gatt == null || characteristic == null) return;
             if (!TX_CHAR_UUID.equals(characteristic.getUuid())) return;
             byte[] data = characteristic.getValue();
             if (data == null || data.length == 0) return;
@@ -690,6 +696,7 @@ public class MeshManager {
         // API 33+: override for new callback signature
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, byte[] value) {
+            if (gatt == null || characteristic == null || value == null) return;
             if (!TX_CHAR_UUID.equals(characteristic.getUuid())) return;
             if (value == null || value.length == 0) return;
             processResponse(value);
