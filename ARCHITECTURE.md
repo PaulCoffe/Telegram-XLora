@@ -5,7 +5,9 @@
 ## 1. Overview
 Telegram-XLora is a custom Android client based on Forkgram that integrates **MeshCore LoRa** networking via Bluetooth LE. Users can communicate without internet using BLE-connected LoRa hardware (Heltec T114, LilyGO, etc.).
 
-**Protocol Reference**: [MeshCore companion_protocol.md v1.12.0+](https://github.com/meshcore-dev/MeshCore/blob/main/docs/companion_protocol.md)
+**Protocol Reference**:
+- [MeshCore companion_protocol.md v1.12.0+](https://github.com/meshcore-dev/MeshCore/blob/main/docs/companion_protocol.md)
+- [MeshCore Open Source Reference (zjs81/meshcore-open)](https://github.com/zjs81/meshcore-open)
 
 ---
 
