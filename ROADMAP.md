@@ -197,6 +197,15 @@
 - [x] Stabilized CI/CD pipeline on `mesh-dev` branch.
 
 
+---
+
+## Phase 15 — Maintenance Protocol & Documentation Enforcement ✅ (Complete)
+
+- [x] Established mandatory documentation sync rule in `AGENTS.md` (v7.4)
+- [x] Created `MAINTENANCE.md` guide for long-term project support
+- [x] Identified and documented integration "Hooks" in `ARCHITECTURE.md`
+- [x] Institutionalized documentation updates before every commit
+
 ## Current Status (2026-04-14)
 
 | Component | Status |
@@ -209,5 +218,6 @@
 | Offline queue | ✅ Stable |
 | ADVERT Real-time Discovery| ✅ Success |
 | CI Build (`mesh-dev`) | ✅ Fixed & Stable |
+| Maintenance Protocol | ✅ Active |
 | Hardware QA (Heltec T114) | ✅ Final Field Test Success |
 

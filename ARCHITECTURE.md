@@ -253,4 +253,35 @@ To maximize character capacity for Cyrillic text over LoRa (which has a strict ~
 - **Language**: Russian for chat, English for code/git/docs
 - **Build target**: Android 16, Target SDK 35
 - **Hardware**: Heltec T114, LilyGO running MeshCore firmware ≥ v1.12.0
-- **Zero Trust**: Specific dependency versions pinned; no hardcoded secrets
+## 11. Maintenance Touchpoints (Integrated Hooks)
+
+To ensure smooth upgrades when the upstream Telegram project changes, the following files must be verified as they contain critical XLora integration "hooks":
+
+### Core Logic Hooks
+- **`TMessagesProj/src/main/java/org/telegram/messenger/MessagesController.java`**:
+  - Intercepts `loadMessagesInternal()` for dialogs < -2B.
+  - Implements synthetic dialog filtering in `getMeshDialogs()`.
+  - **Standard**: Uses `dialogMessages` (plural).
+
+- **`TMessagesProj/src/main/java/org/telegram/messenger/SendMessagesHelper.java`**:
+  - Intercepts `sendMessage()` to route data through `MeshManager` when the destination is a synthetic dialog.
+
+- **`TMessagesProj/src/main/java/org/telegram/messenger/ApplicationLoader.java`**:
+  - Initializes `MeshManager.getInstance()` on app start.
+  - Manages the lifecycle of `MeshForegroundService`.
+
+### UI & Presentation Hooks
+- **`TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java`**:
+  - Customizes folder rendering for "Mesh Channels" and "Mesh Contacts".
+  - Redirects FAB clicks to `MeshSettingsActivity`.
+
+- **`TMessagesProj/src/main/java/org/telegram/ui/Cells/ChatMessageCell.java`**:
+  - Renders custom status icons for LoRa message delivery (Stage 0-3).
+  - Appends SNR and Hops telemetry to message bubbles.
+
+- **`TMessagesProj/src/main/java/org/telegram/ui/Cells/DialogCell.java`**:
+  - Renders the Mesh radio icon and telemetry preview in the chat list.
+
+### Internal Module Hooks
+- **`TMessagesProj/src/main/java/org/telegram/messenger/mesh/*`**:
+  - **Standalone Core**: Keep this directory as decoupled as possible from the Rest of Telegram to facilitate updates.

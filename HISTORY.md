@@ -1,5 +1,24 @@
 ---
 
+## [2026-04-14] Phase 16: Maintenance Protocol Implementation (mesh-dev)
+
+### Objective
+Institutionalize a strict documentation-first workflow to ensure long-term stability and ease of integration when upstream dependencies (Telegram/MeshCore) change.
+
+### Changes
+1.  **Protocol Institutionalization**:
+    *   Updated `AGENTS.md` (v7.4) to include **Section 6.8: Documentation Integrity**, making updates to `MAINTENANCE.md`, `ARCHITECTURE.md`, `ROADMAP.md`, and `HISTORY.md` mandatory before every commit.
+2.  **Maintenance Documentation**:
+    *   Created `MAINTENANCE.md` providing a clear strategy for Upstream Tracking (remotes), Submodule management, and Conflict Resolution.
+    *   Enhanced `ARCHITECTURE.md` with **Section 11: Maintenance Touchpoints**, cataloging every specific "hook" and modification point within the standard Telegram codebase.
+3.  **Roadmap Update**:
+    *   Formalized Phase 15 completion and activated the continuous monitoring status.
+
+### Result
+*   The project now has a "Source of Truth" for maintenance, significantly reducing the risk of architectural drift or breaking changes during upstream merges.
+*   Standardized the plural `dialogMessages` convention as the immutable project baseline.
+
+
 ## [2026-04-14] Phase 15: Global Standardization & Build Stabilization (mesh-dev)
 
 ### Objective
