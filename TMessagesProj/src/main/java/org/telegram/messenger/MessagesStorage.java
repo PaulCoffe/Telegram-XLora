@@ -4415,7 +4415,7 @@ public class MessagesStorage extends BaseController {
         });
     }
 
-    public void resetDialogs(TLRPC.messages_Dialogs dialogsRes, int messagesCount, int seq, int newPts, int date, int qts, LongSparseArray<TLRPC.Dialog> new_dialogs_dict, LongSparseArray<ArrayList<MessageObject>> new_dialogMessage, TLRPC.Message lastMessage, int dialogsCount) {
+    public void resetDialogs(TLRPC.messages_Dialogs dialogsRes, int messagesCount, int seq, int newPts, int date, int qts, LongSparseArray<TLRPC.Dialog> new_dialogs_dict, LongSparseArray<ArrayList<MessageObject>> new_dialogMessages, TLRPC.Message lastMessage, int dialogsCount) {
         storageQueue.postRunnable(() -> {
             SQLiteCursor cursor = null;
             try {
@@ -4562,7 +4562,7 @@ public class MessagesStorage extends BaseController {
                 }
                 getUserConfig().draftsLoaded = false;
                 getUserConfig().saveConfig(false);
-                getMessagesController().completeDialogsReset(dialogsRes, messagesCount, seq, newPts, date, qts, new_dialogs_dict, new_dialogMessage, lastMessage);
+                getMessagesController().completeDialogsReset(dialogsRes, messagesCount, seq, newPts, date, qts, new_dialogs_dict, new_dialogMessages, lastMessage);
             } catch (Exception e) {
                 checkSQLException(e);
             } finally {
@@ -16340,12 +16340,12 @@ public class MessagesStorage extends BaseController {
         SQLiteCursor cursor = null;
         try {
             database.beginTransaction();
-            LongSparseArray<TLRPC.Message> new_dialogMessage = new LongSparseArray<>(dialogs.messages.size());
+            LongSparseArray<TLRPC.Message> new_dialogMessages = new LongSparseArray<>(dialogs.messages.size());
             for (int a = 0; a < dialogs.messages.size(); a++) {
                 TLRPC.Message message = dialogs.messages.get(a);
                 long did = MessageObject.getDialogId(message);
-                if (!new_dialogMessage.containsKey(did) || new_dialogMessage.get(did) != null && new_dialogMessage.get(did).date < message.date) {
-                    new_dialogMessage.put(did, message);
+                if (!new_dialogMessages.containsKey(did) || new_dialogMessages.get(did) != null && new_dialogMessages.get(did).date < message.date) {
+                    new_dialogMessages.put(did, message);
                 }
             }
 
@@ -16398,7 +16398,7 @@ public class MessagesStorage extends BaseController {
                     }
                     int messageDate = 0;
 
-                    TLRPC.Message message = new_dialogMessage.get(dialog.id);
+                    TLRPC.Message message = new_dialogMessages.get(dialog.id);
                     if (message != null) {
                         messageDate = Math.max(message.date, messageDate);
 

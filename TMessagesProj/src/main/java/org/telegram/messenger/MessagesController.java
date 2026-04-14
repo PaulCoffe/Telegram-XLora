@@ -2135,7 +2135,7 @@ public class MessagesController extends BaseController implements NotificationCe
 
             LongSparseArray<TLRPC.Dialog> new_dialogs_dict = new LongSparseArray<>();
             SparseArray<TLRPC.EncryptedChat> enc_chats_dict;
-            LongSparseArray<ArrayList<MessageObject>> new_dialogMessage = new LongSparseArray<>();
+            LongSparseArray<ArrayList<MessageObject>> new_dialogMessages = new LongSparseArray<>();
             LongSparseArray<TLRPC.User> usersDict = new LongSparseArray<>();
             LongSparseArray<TLRPC.Chat> chatsDict = new LongSparseArray<>();
 
@@ -2174,12 +2174,12 @@ public class MessagesController extends BaseController implements NotificationCe
                 MessageObject messageObject = new MessageObject(currentAccount, message, usersDict, chatsDict, false, false);
                 newMessages.add(messageObject);
                 long dialogId = messageObject.getDialogId();
-                if (new_dialogMessage.containsKey(dialogId)) {
-                    new_dialogMessage.get(dialogId).add(messageObject);
+                if (new_dialogMessages.containsKey(dialogId)) {
+                    new_dialogMessages.get(dialogId).add(messageObject);
                 } else {
                     ArrayList<MessageObject> arrayList = new ArrayList<>(1);
                     arrayList.add(messageObject);
-                    new_dialogMessage.put(dialogId, arrayList);
+                    new_dialogMessages.put(dialogId, arrayList);
                 }
             }
             //getFileLoader().checkMediaExistance(newMessages);
@@ -2199,7 +2199,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     promoDialog = d;
                 }
                 if (d.last_message_date == 0) {
-                    ArrayList<MessageObject> arrayList = new_dialogMessage.get(d.id);
+                    ArrayList<MessageObject> arrayList = new_dialogMessages.get(d.id);
                     if (arrayList != null) {
                         int maxDate = Integer.MIN_VALUE;
                         for (int i = 0; i < arrayList.size(); ++i) {
@@ -2323,7 +2323,7 @@ public class MessagesController extends BaseController implements NotificationCe
                             }
                         }
 
-                        ArrayList<MessageObject> newMsgs = new_dialogMessage.get(newDialog.id);
+                        ArrayList<MessageObject> newMsgs = new_dialogMessages.get(newDialog.id);
                         if (currentDialog == null) {
                             dialogs_dict.put(key, newDialog);
                             dialogMessages.put(key, newMsgs);
@@ -2342,7 +2342,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         } else {
                             currentDialog.pinned = newDialog.pinned;
                             currentDialog.pinnedNum = newDialog.pinnedNum;
-                            ArrayList<MessageObject> oldMsgs = dialogMessage.get(key);
+                            ArrayList<MessageObject> oldMsgs = dialogMessages.get(key);
                             boolean oldMsgsDeleted = false;
                             for (int i = 0; oldMsgs != null && i < oldMsgs.size(); ++i) {
                                 if (oldMsgs.get(i) != null && oldMsgs.get(i).deleted) {
@@ -2353,7 +2353,7 @@ public class MessagesController extends BaseController implements NotificationCe
                             if (oldMsgsDeleted || oldMsgs == null || currentDialog.top_message > 0) {
                                 if (newDialog.top_message >= currentDialog.top_message || (oldMsgs == null) != (newMsgs == null) || oldMsgs != null && newMsgs != null && oldMsgs.size() != newMsgs.size()) {
                                     dialogs_dict.put(key, newDialog);
-                                    dialogMessage.put(key, newMsgs);
+                                    dialogMessages.put(key, newMsgs);
                                     if (oldMsgs != null) {
                                         for (int i = 0; i < oldMsgs.size(); ++i) {
                                             MessageObject oldMsg = oldMsgs.get(i);
@@ -2391,7 +2391,7 @@ public class MessagesController extends BaseController implements NotificationCe
                             } else {
 //                                if (newMsg == null || newMsg.messageOwner.date > oldMsg.messageOwner.date) {
                                 dialogs_dict.put(key, newDialog);
-                                dialogMessage.put(key, newMsgs);
+                                dialogMessages.put(key, newMsgs);
                                 if (oldMsgs != null) {
                                     for (int i = 0; i < oldMsgs.size(); ++i) {
                                         MessageObject oldMsg = oldMsgs.get(i);
@@ -6593,7 +6593,7 @@ public class MessagesController extends BaseController implements NotificationCe
         users.clear();
         objectsByUsernames.clear();
         chats.clear();
-        dialogMessage.clear();
+        dialogMessages.clear();
         deletedHistory.clear();
         printingUsers.clear();
         printingStrings.clear();
@@ -7949,7 +7949,7 @@ public class MessagesController extends BaseController implements NotificationCe
                             reloadingMessages.remove(dialogId);
                         }
                     }
-                    ArrayList<MessageObject> dialogObjs = dialogMessage.get(dialogId);
+                    ArrayList<MessageObject> dialogObjs = dialogMessages.get(dialogId);
                     if (dialogObjs != null) {
                         for (int i = 0; i < dialogObjs.size(); ++i) {
                             MessageObject dialogObj = dialogObjs.get(i);
@@ -9274,7 +9274,7 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public void markDialogMessageAsDeleted(long dialogId, ArrayList<Integer> messages) {
-        ArrayList<MessageObject> objs = dialogMessage.get(dialogId);
+        ArrayList<MessageObject> objs = dialogMessages.get(dialogId);
         if (objs != null) {
             for (int i = 0; i < objs.size(); ++i) {
                 MessageObject obj = objs.get(i);
@@ -9858,8 +9858,8 @@ public class MessagesController extends BaseController implements NotificationCe
                 }
                 if (!isPromoDialog) {
                     int lastMessageId;
-                    ArrayList<MessageObject> objects = dialogMessage.get(dialog.id);
-                    dialogMessage.remove(dialog.id);
+                    ArrayList<MessageObject> objects = dialogMessages.get(dialog.id);
+                    dialogMessages.remove(dialog.id);
                     if (objects != null && objects.size() > 0 && objects.get(0) != null) {
                         lastMessageId = objects.get(0).getId();
                         for (int i = 0; i < objects.size(); ++i) {
@@ -10805,7 +10805,7 @@ public class MessagesController extends BaseController implements NotificationCe
                                                 chatsDict1.put(c.id, c);
                                             }
                                             MessageObject messageObject = new MessageObject(currentAccount, res2.messages.get(0), usersDict1, chatsDict1, false, true);
-                                            ArrayList<MessageObject> objects = dialogMessage.get(did);
+                                            ArrayList<MessageObject> objects = dialogMessages.get(did);
                                             if (objects == null) {
                                                 objects = new ArrayList<>(1);
                                             }
@@ -10813,7 +10813,7 @@ public class MessagesController extends BaseController implements NotificationCe
                                                 objects.clear();
                                             }
                                             objects.add(messageObject);
-                                            dialogMessage.put(did, objects);
+                                            dialogMessages.put(did, objects);
                                             if (promoDialog.last_message_date == 0) {
                                                 promoDialog.last_message_date = messageObject.messageOwner.date;
                                             }
@@ -11265,7 +11265,7 @@ public class MessagesController extends BaseController implements NotificationCe
             
             // Post-processing to add Mesh metadata to MessageObjects
             AndroidUtilities.runOnUIThread(() -> {
-                ArrayList<MessageObject> objects = dialogMessage.get(dialogId);
+                ArrayList<MessageObject> objects = dialogMessages.get(dialogId);
                 if (objects != null) {
                     for (MessageObject mo : objects) {
                         for (org.telegram.messenger.mesh.MeshStorage.MeshMessage m : msgs) {
@@ -12551,7 +12551,7 @@ public class MessagesController extends BaseController implements NotificationCe
             resetDialogsAll.chats.addAll(resetDialogsPinned.chats);
 
             LongSparseArray<TLRPC.Dialog> new_dialogs_dict = new LongSparseArray<>();
-            LongSparseArray<ArrayList<MessageObject>> new_dialogMessage = new LongSparseArray<>();
+            LongSparseArray<ArrayList<MessageObject>> new_dialogMessages = new LongSparseArray<>();
             LongSparseArray<TLRPC.User> usersDict = new LongSparseArray<>();
             LongSparseArray<TLRPC.Chat> chatsDict = new LongSparseArray<>();
 
@@ -12585,12 +12585,12 @@ public class MessagesController extends BaseController implements NotificationCe
                 }
                 MessageObject messageObject = new MessageObject(currentAccount, message, usersDict, chatsDict, false, true);
                 long did = messageObject.getDialogId();
-                ArrayList<MessageObject> arrayList = new_dialogMessage.get(did);
+                ArrayList<MessageObject> arrayList = new_dialogMessages.get(did);
                 if (arrayList == null) {
                     arrayList = new ArrayList<MessageObject>(1);
                 }
                 arrayList.add(messageObject);
-                new_dialogMessage.put(did, arrayList);
+                new_dialogMessages.put(did, arrayList);
             }
 
             for (int a = 0; a < resetDialogsAll.dialogs.size(); a++) {
@@ -12600,7 +12600,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     continue;
                 }
                 if (d.last_message_date == 0) {
-                    ArrayList<MessageObject> messages = new_dialogMessage.get(d.id);
+                    ArrayList<MessageObject> messages = new_dialogMessages.get(d.id);
                     if (messages != null) {
                         int maxDate = Integer.MIN_VALUE;
                         for (int i = 0; i < messages.size(); ++i) {
@@ -12666,13 +12666,13 @@ public class MessagesController extends BaseController implements NotificationCe
                 }
             }
 
-            getMessagesStorage().resetDialogs(resetDialogsAll, messagesCount, seq, newPts, date, qts, new_dialogs_dict, new_dialogMessage, lastMessage, dialogsCount);
+            getMessagesStorage().resetDialogs(resetDialogsAll, messagesCount, seq, newPts, date, qts, new_dialogs_dict, new_dialogMessages, lastMessage, dialogsCount);
             resetDialogsPinned = null;
             resetDialogsAll = null;
         }
     }
 
-    protected void completeDialogsReset(final TLRPC.messages_Dialogs dialogsRes, int messagesCount, int seq, int newPts, int date, int qts, LongSparseArray<TLRPC.Dialog> new_dialogs_dict, LongSparseArray<ArrayList<MessageObject>> new_dialogMessage, TLRPC.Message lastMessage) {
+    protected void completeDialogsReset(final TLRPC.messages_Dialogs dialogsRes, int messagesCount, int seq, int newPts, int date, int qts, LongSparseArray<TLRPC.Dialog> new_dialogs_dict, LongSparseArray<ArrayList<MessageObject>> new_dialogMessages, TLRPC.Message lastMessage) {
         Utilities.stageQueue.postRunnable(() -> {
             gettingDifference = false;
             getMessagesStorage().setLastPtsValue(newPts);
@@ -12695,8 +12695,8 @@ public class MessagesController extends BaseController implements NotificationCe
                     TLRPC.Dialog oldDialog = allDialogs.get(a);
                     if (!DialogObject.isEncryptedDialog(oldDialog.id)) {
                         dialogs_dict.remove(oldDialog.id);
-                        ArrayList<MessageObject> messages = dialogMessage.get(oldDialog.id);
-                        dialogMessage.remove(oldDialog.id);
+                        ArrayList<MessageObject> messages = dialogMessages.get(oldDialog.id);
+                        dialogMessages.remove(oldDialog.id);
                         if (messages != null) {
                             for (int i = 0; i < messages.size(); ++i) {
                                 MessageObject message = messages.get(i);
@@ -12720,8 +12720,8 @@ public class MessagesController extends BaseController implements NotificationCe
                         mediaDataController.saveDraft(value.id, 0, value.draft, null, false);
                     }
                     dialogs_dict.put(key, value);
-                    ArrayList<MessageObject> messageObjects = new_dialogMessage.get(value.id);
-                    dialogMessage.put(key, messageObjects);
+                    ArrayList<MessageObject> messageObjects = new_dialogMessages.get(value.id);
+                    dialogMessages.put(key, messageObjects);
                     if (messageObjects != null) {
                         for (int i = 0; i < messageObjects.size(); ++i) {
                             MessageObject messageObject = messageObjects.get(i);
@@ -13009,7 +13009,7 @@ public class MessagesController extends BaseController implements NotificationCe
 
             LongSparseArray<TLRPC.Dialog> new_dialogs_dict = new LongSparseArray<>();
             SparseArray<TLRPC.EncryptedChat> enc_chats_dict;
-            LongSparseArray<ArrayList<MessageObject>> new_dialogMessage = new LongSparseArray<>();
+            LongSparseArray<ArrayList<MessageObject>> new_dialogMessages = new LongSparseArray<>();
             LongSparseArray<TLRPC.User> usersDict = new LongSparseArray<>();
             LongSparseArray<TLRPC.Chat> chatsDict = new LongSparseArray<>();
 
@@ -13058,12 +13058,12 @@ public class MessagesController extends BaseController implements NotificationCe
                 MessageObject messageObject = new MessageObject(currentAccount, message, usersDict, chatsDict, false, false);
                 newMessages.add(messageObject);
                 long did = messageObject.getDialogId();
-                ArrayList<MessageObject> arrayList = new_dialogMessage.get(did);
+                ArrayList<MessageObject> arrayList = new_dialogMessages.get(did);
                 if (arrayList == null) {
                     arrayList = new ArrayList<MessageObject>(1);
                 }
                 arrayList.add(messageObject);
-                new_dialogMessage.put(did, arrayList);
+                new_dialogMessages.put(did, arrayList);
             }
             if (!fromCache && !migrate && dialogsLoadOffset[UserConfig.i_dialogsLoadOffsetId] != -1 && loadType == 0) {
                 int totalDialogsLoadCount = getUserConfig().getTotalDialogsCount(folderId);
@@ -13141,7 +13141,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     promoDialog = d;
                 }
                 if (d.last_message_date == 0) {
-                    ArrayList<MessageObject> messages = new_dialogMessage.get(d.id);
+                    ArrayList<MessageObject> messages = new_dialogMessages.get(d.id);
                     if (messages != null) {
                         int maxDate = Integer.MIN_VALUE;
                         for (int i = 0; i < messages.size(); ++i) {
@@ -13281,11 +13281,11 @@ public class MessagesController extends BaseController implements NotificationCe
                     if (value.folder_id != folderId) {
                         archivedDialogsCount++;
                     }
-                    ArrayList<MessageObject> newMsgs = new_dialogMessage.get(value.id);
+                    ArrayList<MessageObject> newMsgs = new_dialogMessages.get(value.id);
                     if (currentDialog == null) {
                         added = true;
                         dialogs_dict.put(key, value);
-                        dialogMessage.put(key, newMsgs);
+                        dialogMessages.put(key, newMsgs);
                         if (newMsgs != null) {
                             for (int i = 0; i < newMsgs.size(); ++i) {
                                 MessageObject newMsg = newMsgs.get(i);
@@ -13306,7 +13306,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         }
                         currentDialog.pinned = value.pinned;
                         currentDialog.pinnedNum = value.pinnedNum;
-                        ArrayList<MessageObject> oldMsgs = dialogMessage.get(key);
+                        ArrayList<MessageObject> oldMsgs = dialogMessages.get(key);
 
                         boolean oldMsgsDeleted = false;
                         for (int i = 0; oldMsgs != null && i < oldMsgs.size(); ++i) {
@@ -13318,7 +13318,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         if (oldMsgsDeleted || oldMsgs == null || currentDialog.top_message > 0) {
                             if (value.top_message >= currentDialog.top_message || (oldMsgs == null) != (newMsgs == null) || oldMsgs != null && newMsgs != null && oldMsgs.size() != newMsgs.size()) {
                                 dialogs_dict.put(key, value);
-                                dialogMessage.put(key, newMsgs);
+                                dialogMessages.put(key, newMsgs);
                                 if (oldMsgs != null) {
                                     for (int i = 0; i < oldMsgs.size(); ++i) {
                                         MessageObject oldMsg = oldMsgs.get(i);
@@ -13358,7 +13358,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         } else {
 //                            if (newMsg == null && oldMs.getId() > 0 || newMsg != null && newMsg.messageOwner.date > oldMsg.messageOwner.date)
                             dialogs_dict.put(key, value);
-                            dialogMessage.put(key, newMsgs);
+                            dialogMessages.put(key, newMsgs);
                             if (oldMsgs != null) {
                                 for (int i = 0; i < oldMsgs.size(); ++i) {
                                     MessageObject oldMsg = oldMsgs.get(i);
@@ -13718,7 +13718,7 @@ public class MessagesController extends BaseController implements NotificationCe
     public void processDialogsUpdate(final TLRPC.messages_Dialogs dialogsRes, ArrayList<TLRPC.EncryptedChat> encChats, boolean fromCache) {
         Utilities.stageQueue.postRunnable(() -> {
             LongSparseArray<TLRPC.Dialog> new_dialogs_dict = new LongSparseArray<>();
-            LongSparseArray<ArrayList<MessageObject>> new_dialogMessage = new LongSparseArray<>();
+            LongSparseArray<ArrayList<MessageObject>> new_dialogMessages = new LongSparseArray<>();
             LongSparseArray<TLRPC.User> usersDict = new LongSparseArray<>(dialogsRes.users.size());
             LongSparseArray<TLRPC.Chat> chatsDict = new LongSparseArray<>(dialogsRes.chats.size());
             LongSparseIntArray dialogsToUpdate = new LongSparseIntArray();
@@ -13751,12 +13751,12 @@ public class MessagesController extends BaseController implements NotificationCe
                 MessageObject messageObject = new MessageObject(currentAccount, message, usersDict, chatsDict, false, false);
                 newMessages.add(messageObject);
                 long did = messageObject.getDialogId();
-                ArrayList<MessageObject> arrayList = new_dialogMessage.get(did);
+                ArrayList<MessageObject> arrayList = new_dialogMessages.get(did);
                 if (arrayList == null) {
                     arrayList = new ArrayList<MessageObject>(1);
                 }
                 arrayList.add(messageObject);
-                new_dialogMessage.put(did, arrayList);
+                new_dialogMessages.put(did, arrayList);
             }
             getFileLoader().checkMediaExistance(newMessages);
 
@@ -13777,7 +13777,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     }
                 }
                 if (d.last_message_date == 0) {
-                    ArrayList<MessageObject> messages = new_dialogMessage.get(d.id);
+                    ArrayList<MessageObject> messages = new_dialogMessages.get(d.id);
                     if (messages != null) {
                         int maxDate = Integer.MIN_VALUE;
                         for (int i = 0; i < messages.size(); ++i) {
@@ -13824,7 +13824,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     }
                     TLRPC.Dialog value = new_dialogs_dict.valueAt(a);
                     TLRPC.Dialog currentDialog = dialogs_dict.get(key);
-                    ArrayList<MessageObject> newMsgs = new_dialogMessage.get(value.id);
+                    ArrayList<MessageObject> newMsgs = new_dialogMessages.get(value.id);
                     if (currentDialog == null) {
                         if (BuildVars.LOGS_ENABLED) {
                             FileLog.d("processDialogsUpdate dialog null");
@@ -13832,7 +13832,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         int offset = nextDialogsCacheOffset.get(value.folder_id, 0) + 1;
                         nextDialogsCacheOffset.put(value.folder_id, offset);
                         dialogs_dict.put(key, value);
-                        dialogMessage.put(key, newMsgs);
+                        dialogMessages.put(key, newMsgs);
                         if (newMsgs == null || newMsgs.size() <= 0) {
                             if (fromCache) {
                                 checkLastDialogMessage(value, null, 0);
@@ -13877,7 +13877,7 @@ public class MessagesController extends BaseController implements NotificationCe
                             currentDialog.unread_poll_votes_count = value.unread_poll_votes_count;
                             getNotificationCenter().postNotificationName(NotificationCenter.dialogsUnreadPollVotesCounterChanged, currentDialog.id, 0L, currentDialog.unread_poll_votes_count, null);
                         }
-                        ArrayList<MessageObject> oldMsgs = dialogMessage.get(key);
+                        ArrayList<MessageObject> oldMsgs = dialogMessages.get(key);
                         boolean oldMsgsDeleted = false;
                         for (int i = 0; oldMsgs != null && i < oldMsgs.size(); ++i) {
                             if (oldMsgs.get(i) != null && oldMsgs.get(i).deleted) {
@@ -13892,7 +13892,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         if (oldMsgs == null || currentDialog.top_message > 0) {
                             if (oldMsgsDeleted || value.top_message > currentDialog.top_message || (oldMsgs == null) != (newMsgs == null) || oldMsgs != null && newMsgs != null && oldMsgs.size() != newMsgs.size()) {
                                 dialogs_dict.put(key, value);
-                                dialogMessage.put(key, newMsgs);
+                                dialogMessages.put(key, newMsgs);
                                 for (int i = 0; oldMsgs != null && i < oldMsgs.size(); ++i) {
                                     MessageObject oldMsg = oldMsgs.get(i);
                                     if (oldMsg != null && oldMsg.messageOwner.peer_id.channel_id == 0) {
@@ -13934,7 +13934,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         } else {
                             if (oldMsgsDeleted || messagesMaxDate(newMsgs) > messagesMaxDate(oldMsgs)) {
                                 dialogs_dict.put(key, value);
-                                dialogMessage.put(key, newMsgs);
+                                dialogMessages.put(key, newMsgs);
                                 if (oldMsgs != null) {
                                     for (int i = 0; i < oldMsgs.size(); ++i) {
                                         MessageObject oldMsg = oldMsgs.get(i);
@@ -16737,7 +16737,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 toCache.dialogs.addAll(res.dialogs);
                 toCache.messages.addAll(res.messages);
 
-                LongSparseArray<ArrayList<MessageObject>> new_dialogMessage = new LongSparseArray<>();
+                LongSparseArray<ArrayList<MessageObject>> new_dialogMessages = new LongSparseArray<>();
                 LongSparseArray<TLRPC.User> usersDict = new LongSparseArray<>();
                 LongSparseArray<TLRPC.Chat> chatsDict = new LongSparseArray<>();
 
@@ -16767,12 +16767,12 @@ public class MessagesController extends BaseController implements NotificationCe
                     MessageObject messageObject = new MessageObject(currentAccount, message, usersDict, chatsDict, false, false);
                     newMessages.add(messageObject);
                     long did = messageObject.getDialogId();
-                    ArrayList<MessageObject> arrayList = new_dialogMessage.get(did);
+                    ArrayList<MessageObject> arrayList = new_dialogMessages.get(did);
                     if (arrayList == null) {
                         arrayList = new ArrayList<MessageObject>();
                     }
                     arrayList.add(messageObject);
-                    new_dialogMessage.put(did, arrayList);
+                    new_dialogMessages.put(did, arrayList);
                 }
                 //getFileLoader().checkMediaExistance(newMessages);
                 boolean firstIsFolder = !newPinnedDialogs.isEmpty() && newPinnedDialogs.get(0) instanceof TLRPC.TL_dialogFolder;
@@ -16792,7 +16792,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         }
                     }
                     if (d.last_message_date == 0) {
-                        ArrayList<MessageObject> messages = new_dialogMessage.get(d.id);
+                        ArrayList<MessageObject> messages = new_dialogMessages.get(d.id);
                         if (messages != null) {
                             int maxDate = Integer.MIN_VALUE;
                             for (int i = 0; i < messages.size(); ++i) {
@@ -16877,8 +16877,8 @@ public class MessagesController extends BaseController implements NotificationCe
                             } else {
                                 added = true;
                                 dialogs_dict.put(dialog.id, dialog);
-                                ArrayList<MessageObject> messageObjects = new_dialogMessage.get(dialog.id);
-                                dialogMessage.put(dialog.id, messageObjects);
+                                ArrayList<MessageObject> messageObjects = new_dialogMessages.get(dialog.id);
+                                dialogMessages.put(dialog.id, messageObjects);
                                 if (messageObjects != null) {
                                     for (int i = 0; i < messageObjects.size(); ++i) {
                                         MessageObject messageObject = messageObjects.get(i);
@@ -16976,7 +16976,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         }
                     }
                 } else {
-                    ArrayList<MessageObject> objs = dialogMessage.get(-channelId);
+                    ArrayList<MessageObject> objs = dialogMessages.get(-channelId);
                     if (objs != null) {
                         for (int i = 0; i < objs.size(); ++i) {
                             MessageObject obj = objs.get(i);
@@ -20126,7 +20126,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     if (dialogId > 0) {
                         checkUnreadReactions(dialogId, 0, unreadReactions);
                     }
-                    ArrayList<MessageObject> oldObjects = dialogMessage.get(dialogId);
+                    ArrayList<MessageObject> oldObjects = dialogMessages.get(dialogId);
                     if (oldObjects != null) {
                         for (int i = 0; i < oldObjects.size(); ++i) {
                             MessageObject oldObject = oldObjects.get(i);
@@ -20202,7 +20202,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         int messageId = markAsReadMessagesInboxFinal.valueAt(b);
                         TLRPC.Dialog dialog = dialogs_dict.get(key);
                         if (dialog != null && dialog.top_message > 0 && dialog.top_message <= messageId) {
-                            ArrayList<MessageObject> objs = dialogMessage.get(dialog.id);
+                            ArrayList<MessageObject> objs = dialogMessages.get(dialog.id);
                             if (objs != null) {
                                 for (int i = 0; i < objs.size(); ++i) {
                                     MessageObject obj = objs.get(i);
@@ -20230,7 +20230,7 @@ public class MessagesController extends BaseController implements NotificationCe
                             updateMask |= UPDATE_MASK_READ_DIALOG_MESSAGE;
                         }
                         if (dialog != null && dialog.top_message > 0 && dialog.top_message <= messageId) {
-                            ArrayList<MessageObject> objs = dialogMessage.get(dialog.id);
+                            ArrayList<MessageObject> objs = dialogMessages.get(dialog.id);
                             if (objs != null) {
                                 for (int i = 0; i < objs.size(); ++i) {
                                     MessageObject obj = objs.get(i);
@@ -20292,7 +20292,7 @@ public class MessagesController extends BaseController implements NotificationCe
                             }
                         }
                     } else {
-                        ArrayList<MessageObject> objs = dialogMessage.get(dialogId);
+                        ArrayList<MessageObject> objs = dialogMessages.get(dialogId);
                         if (objs != null) {
                             for (int i = 0; i < objs.size(); ++i) {
                                 MessageObject obj = objs.get(i);
@@ -20337,7 +20337,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     int id = clearHistoryMessagesFinal.valueAt(a);
                     long did = -key;
                     getNotificationCenter().postNotificationName(NotificationCenter.historyCleared, did, id);
-                    ArrayList<MessageObject> objs = dialogMessage.get(did);
+                    ArrayList<MessageObject> objs = dialogMessages.get(did);
                     if (objs != null) {
                         for (int i = 0; i < objs.size(); ++i) {
                             MessageObject obj = objs.get(i);
@@ -21119,7 +21119,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 if (offset > 0) {
                     nextDialogsCacheOffset.put(dialog.folder_id, offset - 1);
                 }
-                dialogMessage.remove(dialog.id);
+                dialogMessages.remove(dialog.id);
                 ArrayList<TLRPC.Dialog> dialogs = dialogsByFolder.get(dialog.folder_id);
                 if (dialogs != null) {
                     dialogs.remove(dialog);
@@ -21193,7 +21193,7 @@ public class MessagesController extends BaseController implements NotificationCe
                     }
                 }
             }
-            dialogMessage.put(dialogId, arrayList);
+            dialogMessages.put(dialogId, arrayList);
             getTranslateController().checkDialogMessage(dialogId);
             changed = true;
 
@@ -21218,7 +21218,7 @@ public class MessagesController extends BaseController implements NotificationCe
         } else {
             if ((dialog.top_message > 0 && lastMessage.getId() > 0 && lastMessage.getId() > dialog.top_message) ||
                     (dialog.top_message < 0 && lastMessage.getId() < 0 && lastMessage.getId() < dialog.top_message) ||
-                    dialogMessage.indexOfKey(dialogId) < 0 || dialog.top_message < 0 || dialog.last_message_date <= lastMessage.messageOwner.date) {
+                    dialogMessages.indexOfKey(dialogId) < 0 || dialog.top_message < 0 || dialog.last_message_date <= lastMessage.messageOwner.date) {
                 MessageObject object = dialogMessagesByIds.get(dialog.top_message);
                 if (object != null && object.messageOwner.peer_id.channel_id == 0) {
                     dialogMessagesByIds.remove(dialog.top_message);
@@ -21236,7 +21236,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         arrayList.add(msg);
                     }
                 }
-                dialogMessage.put(dialogId, arrayList);
+                dialogMessages.put(dialogId, arrayList);
                 getTranslateController().checkDialogMessage(dialogId);
                 if (lastMessage.messageOwner.peer_id.channel_id == 0) {
                     dialogMessagesByIds.put(lastMessage.getId(), lastMessage);
@@ -21426,7 +21426,7 @@ public class MessagesController extends BaseController implements NotificationCe
         for (int a = 0, N = allDialogs.size(); a < N; a++) {
             TLRPC.Dialog d = allDialogs.get(a);
             if (d instanceof TLRPC.TL_dialog) {
-                ArrayList<MessageObject> messageObjects = dialogMessage.get(d.id);
+                ArrayList<MessageObject> messageObjects = dialogMessages.get(d.id);
                 if (messageObjects != null) {
                     int maxDate = Integer.MIN_VALUE;
                     for (int i = 0; i < messageObjects.size(); ++i) {

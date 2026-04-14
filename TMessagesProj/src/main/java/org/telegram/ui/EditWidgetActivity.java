@@ -332,7 +332,7 @@ public class EditWidgetActivity extends BaseFragment {
                         FileLog.e(e);
                     }
 
-                    ArrayList<MessageObject> messages = getMessagesController().dialogMessage.get(dialog.id);
+                    ArrayList<MessageObject> messages = getMessagesController().dialogMessages.get(dialog.id);
                     MessageObject message = messages != null && messages.size() > 0 ? messages.get(0) : null;
                     if (message != null) {
                         TLRPC.User fromUser = null;

@@ -1142,7 +1142,7 @@ public class SecretChatHelper extends BaseController {
                         TLRPC.Dialog dialog = getMessagesController().dialogs_dict.get(did);
                         if (dialog != null) {
                             dialog.unread_count = 0;
-                            getMessagesController().dialogMessage.remove(dialog.id);
+                            getMessagesController().dialogMessages.remove(dialog.id);
                         }
                         getMessagesStorage().getStorageQueue().postRunnable(() -> AndroidUtilities.runOnUIThread(() -> {
                             getNotificationsController().processReadMessages(null, did, 0, Integer.MAX_VALUE, false);

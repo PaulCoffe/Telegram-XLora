@@ -3059,9 +3059,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         if (dialogs != null && !dialogs.isEmpty()) {
             for (int a = 0, N = dialogs.size(); a < N; a++) {
                 TLRPC.Dialog dialog = dialogs.get(a);
-                LongSparseArray<ArrayList<MessageObject>> dialogMessage = MessagesController.getInstance(currentAccount).dialogMessage;
-                if (dialogMessage != null) {
-                    ArrayList<MessageObject> groupMessages = dialogMessage.get(dialog.id);
+                LongSparseArray<ArrayList<MessageObject>> dialogMessages = MessagesController.getInstance(currentAccount).dialogMessages;
+                if (dialogMessages != null) {
+                    ArrayList<MessageObject> groupMessages = dialogMessages.get(dialog.id);
                     MessageObject object = groupMessages != null && !groupMessages.isEmpty() ? groupMessages.get(0) : null;
                     if (object != null && (maxMessage == null || object.messageOwner.date > maxMessage.messageOwner.date)) {
                         maxMessage = object;
@@ -3124,7 +3124,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                     ttlPeriod = dialog.ttl_period;
                     if (mask == 0) {
                         clearingDialog = MessagesController.getInstance(currentAccount).isClearingDialog(dialog.id);
-                        groupMessages = MessagesController.getInstance(currentAccount).dialogMessage.get(dialog.id);
+                        groupMessages = MessagesController.getInstance(currentAccount).dialogMessages.get(dialog.id);
                         message = groupMessages != null && groupMessages.size() > 0 ? groupMessages.get(0) : null;
                         lastUnreadState = message != null && message.isUnread();
                         TLRPC.Chat localChat = MessagesController.getInstance(currentAccount).getChat(-dialog.id);

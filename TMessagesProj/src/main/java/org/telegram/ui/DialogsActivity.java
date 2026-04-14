@@ -9219,7 +9219,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                             user = getMessagesController().getUser(selectedDialog);
                         }
                         if (user != null) {
-                            ArrayList<MessageObject> dialogMessages = MessagesController.getInstance(currentAccount).dialogMessage.get(user.id);
+                            ArrayList<MessageObject> dialogMessages = user != null ? MessagesController.getInstance(currentAccount).dialogMessages.get(user.id) : null;
                             boolean lastMessageIsJoined = dialogMessages != null && dialogMessages.size() == 1 && dialogMessages.get(0) != null && dialogMessages.get(0).messageOwner != null && (dialogMessages.get(0).messageOwner.action instanceof TLRPC.TL_messageActionUserJoined || dialogMessages.get(0).messageOwner.action instanceof TLRPC.TL_messageActionContactSignUp);
                             boolean canRevokeInbox = !user.bot && !UserObject.isDeleted(user) && user.id != getUserConfig().getClientUserId() && !lastMessageIsJoined;
                             if (canRevokeInbox) {

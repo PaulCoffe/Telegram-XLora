@@ -2335,7 +2335,7 @@ public class AlertsCreator {
         boolean deleteChatForAll = false;
 
         boolean lastMessageIsJoined = false;
-        ArrayList<MessageObject> dialogMessages = user != null ? MessagesController.getInstance(account).dialogMessage.get(user.id) : null;
+        ArrayList<MessageObject> dialogMessages = user != null ? MessagesController.getInstance(account).dialogMessages.get(user.id) : null;
         if (dialogMessages != null && dialogMessages.size() == 1 && dialogMessages.get(0) != null && dialogMessages.get(0).messageOwner != null && (dialogMessages.get(0).messageOwner.action instanceof TLRPC.TL_messageActionUserJoined || dialogMessages.get(0).messageOwner.action instanceof TLRPC.TL_messageActionContactSignUp)) {
             lastMessageIsJoined = true;
         }
