@@ -1207,15 +1207,15 @@ public class MeshManager {
         int txtType = TXT_TYPE_PLAIN;
         
         byte[] utf8Bytes = text.getBytes(StandardCharsets.UTF_8);
-        if (utf8Bytes.length > 133 && isUCFCompatible(text)) {
+        if (utf8Bytes.length > 120 && isUCFCompatible(text)) {
             textBytes = encodeUCF(text);
             txtType = TXT_TYPE_UCF;
         } else {
             textBytes = utf8Bytes;
         }
 
-        if (textBytes.length > 133) {
-            FileLog.e(TAG + ": Message too long (" + textBytes.length + " > 133)");
+        if (textBytes.length > 120) {
+            FileLog.e(TAG + ": Message too long (" + textBytes.length + " > 120)");
             return;
         }
         int ts = (int) (System.currentTimeMillis() / 1000L);
@@ -1265,15 +1265,15 @@ public class MeshManager {
         int txtType = TXT_TYPE_PLAIN;
 
         byte[] utf8Bytes = text.getBytes(StandardCharsets.UTF_8);
-        if (utf8Bytes.length > 133 && isUCFCompatible(text)) {
+        if (utf8Bytes.length > 120 && isUCFCompatible(text)) {
             textBytes = encodeUCF(text);
             txtType = TXT_TYPE_UCF;
         } else {
             textBytes = utf8Bytes;
         }
 
-        if (textBytes.length > 133) {
-            FileLog.e(TAG + ": DM too long (" + textBytes.length + " > 133)");
+        if (textBytes.length > 120) {
+            FileLog.e(TAG + ": DM too long (" + textBytes.length + " > 120)");
             return;
         }
         // Parse 6-byte pubkey prefix from hex
@@ -1559,13 +1559,38 @@ public class MeshManager {
     }
 
     private String extractString(byte[] data, int offset, int maxLen) {
-        if (offset >= data.length) return "";
+        if (data == null || offset >= data.length) return "";
         int len = 0;
         int limit = Math.min(maxLen, data.length - offset);
+        // Search for null terminator or end of data
         while (len < limit && data[offset + len] != 0) {
             len++;
         }
-        return new String(data, offset, len, StandardCharsets.UTF_8).trim();
+        
+        if (len == 0) return "";
+        
+        try {
+            String str = new String(data, offset, len, StandardCharsets.UTF_8);
+            // Filter out binary headers (&3, \0, etc.) and non-printable characters
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < str.length(); i++) {
+                char c = str.charAt(i);
+                // Allow letters, digits, standard punctuation, and emojis (Surrogates)
+                if (c >= 32 && c != 127 || Character.isSurrogate(c)) {
+                    sb.append(c);
+                }
+            }
+            String result = sb.toString().trim();
+            
+            // Protection against binary artifacts like "&3" observed in software logs
+            if (result.startsWith("&") && result.length() > 2 && Character.isDigit(result.charAt(1))) {
+                result = result.substring(2).trim();
+            }
+            
+            return result;
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     public boolean isHandshakeCompleted() { return isHandshakeComplete; }

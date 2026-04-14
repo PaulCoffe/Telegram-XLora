@@ -4511,7 +4511,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     protected void onLineCountChanged(int oldLineCount, int newLineCount) {
-
+        if (messageEditTextContainer != null) {
+            messageEditTextContainer.requestLayout();
+        }
     }
 
     private void startLockTransition() {
@@ -5601,6 +5603,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         updateFieldHint(false);
         messageEditText.setSingleLine(false);
         messageEditText.setMaxLines(6);
+        messageEditText.setHorizontallyScrolling(false);
         messageEditText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
         messageEditText.setGravity(Gravity.BOTTOM);
         messageEditText.setPadding(0, dp(9), 0, dp(10));
@@ -5612,7 +5615,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         messageEditText.setHintTextColor(getThemedColor(Theme.key_chat_messagePanelHint));
         messageEditText.setCursorColor(getThemedColor(Theme.key_chat_messagePanelCursor));
         messageEditText.setHandlesColor(getThemedColor(Theme.key_chat_TextSelectionCursor));
-        messageEditTextContainer.addView(messageEditText, 1, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM, 52, 0, isChat ? 50 : 2, 1.5f));
+        messageEditTextContainer.addView(messageEditText, 1, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.BOTTOM, 52, 0, isChat ? 50 : 2, 0));
         messageEditText.setOnKeyListener(new OnKeyListener() {
 
             @Override
@@ -6474,8 +6477,10 @@ public class ChatActivityEnterView extends FrameLayout implements
             
             // Apply 120-symbol limit for Mesh dialogs
             if (isMeshDialog(dialog_id)) {
+                currentLimit = 120;
                 messageEditText.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(120)});
             } else {
+                currentLimit = accountInstance.getMessagesController().maxMessageLength;
                 messageEditText.setFilters(new android.text.InputFilter[]{}); // Reset filters for normal TG dialogs
             }
         }

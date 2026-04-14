@@ -3408,6 +3408,16 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 Theme.dialogs_archiveAvatarDrawable.setCallback(this);
                 avatarDrawable.setAvatarType(AvatarDrawable.AVATAR_TYPE_ARCHIVED);
                 avatarImage.setImage(null, null, avatarDrawable, null, user, 0);
+            } else if (isMeshDialog(currentDialogId)) {
+                // Custom Mesh node avatar
+                String name = "";
+                if (dialog instanceof org.telegram.messenger.mesh.MeshDialog) {
+                    name = ((org.telegram.messenger.mesh.MeshDialog) dialog).meshName;
+                } else if (message != null && message.messageOwner != null && message.messageOwner.post_author != null) {
+                    name = message.messageOwner.post_author;
+                }
+                avatarDrawable.setInfo(currentDialogId, name, null, null);
+                avatarImage.setForUserOrChat(null, avatarDrawable);
             } else {
                 if (useFromUserAsAvatar && message != null) {
                     avatarDrawable.setInfo(currentAccount, message.getFromPeerObject());
@@ -3440,6 +3450,12 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                     }
                 }
             }
+        }
+    }
+
+    private boolean isMeshDialog(long id) {
+        return id <= -2000000000L;
+    }
 
             if (animated && (oldUnreadCount != unreadCount || oldMarkUnread != markUnread) && (!isDialogCell || (System.currentTimeMillis() - lastDialogChangedTime) > 100)) {
                 if (countAnimator != null) {

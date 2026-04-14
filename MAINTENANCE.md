@@ -48,8 +48,9 @@ If the build fails with "cannot find symbol" for fields like `dialogMessages`, i
 ### CI/CD Validation
 The project uses GitHub Actions for verification. After any merge:
 1. Push to a development branch (e.g., `mesh-dev`).
-2. Monitor `gh run list`.
-3. If the build fails, use `gh run view --log` to identify the broken hook.
+2. **IMPORTANT**: Builds are ALWAYS performed on GitHub by committing to the `mesh-dev` branch. Local builds are for syntax and import checks only.
+3. Monitor `gh run list`.
+4. If the build fails, use `gh run view --log` to identify the broken hook.
 
 ## 5. Deployment
 Always use `./gradlew assembleRelease` to confirm that the native JNI libraries (FFmpeg, MeshCore) are correctly bundled for all architectures (`arm64-v8a` is the primary target).

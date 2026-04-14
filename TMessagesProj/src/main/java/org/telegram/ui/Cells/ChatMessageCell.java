@@ -18335,10 +18335,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 currentTimeString = TextUtils.concat(formatString(R.string.MessageScheduledRepeatSeconds, period), ", ", currentTimeString);
             }
         }
-        if (currentMessageObject != null && currentMessageObject.isMesh) {
-            String meshMetadata = String.format(" | Mesh H%d", currentMessageObject.hops);
-            currentTimeString = TextUtils.concat(currentTimeString, meshMetadata);
-        }
+        // Mesh metadata moved to dedicated layout below the message
         timeTextWidth = timeWidth = (int) Math.ceil(Theme.chat_timePaint.measureText(currentTimeString, 0, currentTimeString == null ? 0 : currentTimeString.length()));
         if (currentMessageObject.scheduled && currentMessageObject.messageOwner.date == 0x7FFFFFFE || currentMessageObject.notime) {
             timeWidth -= dp(8);
@@ -20147,38 +20144,46 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 meshBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
                 meshBorderPaint.setColor(0xFF39FF14);
                 meshBorderPaint.setStyle(Paint.Style.STROKE);
-                meshBorderPaint.setStrokeWidth(dp(2));
+                meshBorderPaint.setStrokeWidth(dp(1.5f));
 
                 meshTelemetryPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
                 meshTelemetryPaint.setColor(0xFF39FF14);
-                meshTelemetryPaint.setTextSize(dp(11));
+                meshTelemetryPaint.setTextSize(dp(10));
                 meshTelemetryPaint.setTypeface(Typeface.MONOSPACE);
             }
 
-            // Calculate rectangular bounds for Mesh message
-            int left = backgroundDrawableLeft;
+            boolean isOut = currentMessageObject.isOutOwner();
+            int backgroundWidth = this.backgroundWidth;
+            int left, right;
+            
+            if (isOut) {
+                right = getMeasuredWidth() - dp(10);
+                left = right - backgroundWidth;
+            } else {
+                left = dp(isAvatarVisible ? 48 : 10);
+                right = left + backgroundWidth;
+            }
+
             int top = backgroundDrawableTop;
-            int right = backgroundDrawableRight + left;
             int bottom = backgroundDrawableBottom;
 
             rect.set(left, top, right, bottom);
-            canvas.drawRoundRect(rect, dp(4), dp(4), meshBackgroundPaint);
-            canvas.drawRoundRect(rect, dp(4), dp(4), meshBorderPaint);
+            canvas.drawRoundRect(rect, dp(6), dp(6), meshBackgroundPaint);
+            canvas.drawRoundRect(rect, dp(6), dp(6), meshBorderPaint);
 
-            // Draw "Technical" corners (small L-shapes)
-            float cornerLen = dp(8);
-            // Top Left
-            canvas.drawLine(left, top + cornerLen, left, top, meshBorderPaint);
-            canvas.drawLine(left, top, left + cornerLen, top, meshBorderPaint);
-            // Top Right
-            canvas.drawLine(right - cornerLen, top, right, top, meshBorderPaint);
-            canvas.drawLine(right, top, right, top + cornerLen, meshBorderPaint);
-            // Bottom Left
-            canvas.drawLine(left, bottom - cornerLen, left, bottom, meshBorderPaint);
-            canvas.drawLine(left, bottom, left + cornerLen, bottom, meshBorderPaint);
-            // Bottom Right
-            canvas.drawLine(right - cornerLen, bottom, right, bottom, meshBorderPaint);
-            canvas.drawLine(right, bottom, right, bottom - cornerLen, meshBorderPaint);
+            // Draw technical corners (styling)
+            float cl = dp(6);
+            canvas.drawLine(left, top + cl, left, top, meshBorderPaint);
+            canvas.drawLine(left, top, left + cl, top, meshBorderPaint);
+            canvas.drawLine(right - cl, top, right, top, meshBorderPaint);
+            canvas.drawLine(right, top, right, top + cl, meshBorderPaint);
+
+            // Telemetry below message
+            String telemetry = String.format("MESH | H:%d | SNR:%d", currentMessageObject.hops, currentMessageObject.snr);
+            if (currentMessageObject.isSent()) {
+                telemetry += " | OK";
+            }
+            canvas.drawText(telemetry, left + dp(10), bottom - dp(8), meshTelemetryPaint);
 
             return;
         }

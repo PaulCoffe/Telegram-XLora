@@ -49,6 +49,7 @@ public class MeshSettingsActivity extends BaseFragment
     private static final int ID_SCAN             = 100;
 
     private static final int ID_SET_NODE_NAME    = 199;
+    private static final int ID_ADD_NODE_MANUAL  = 201;
     private static final int ID_OPEN_RADIO_SETTINGS = 200;
 
     private static final int ID_DEVICE_BASE      = 2;      //  2–99
@@ -146,8 +147,10 @@ public class MeshSettingsActivity extends BaseFragment
 
         // ── Section 6: Discovered Mesh Nodes ────────────────────────
         ArrayList<MeshStorage.MeshNode> nodes = MeshStorage.getInstance().getAllNodes();
+        items.add(UItem.asHeader("Обнаруженные узлы"));
+        items.add(UItem.asButton(ID_ADD_NODE_MANUAL, "Добавить узел вручную", "Укажите публичный ключ и никнейм").accent());
+        
         if (!nodes.isEmpty()) {
-            items.add(UItem.asHeader("Обнаруженные узлы"));
             for (int i = 0; i < nodes.size(); i++) {
                 MeshStorage.MeshNode node = nodes.get(i);
                 String displayName = (node.nickname != null && !node.nickname.isEmpty())
@@ -208,6 +211,9 @@ public class MeshSettingsActivity extends BaseFragment
                 }
             });
 
+        } else if (id == ID_ADD_NODE_MANUAL) {
+            showManualAddDialog();
+
         } else if (id >= ID_NODE_BASE) {
             int idx = id - ID_NODE_BASE;
             ArrayList<MeshStorage.MeshNode> nodes = MeshStorage.getInstance().getAllNodes();
@@ -227,7 +233,7 @@ public class MeshSettingsActivity extends BaseFragment
 
         // Build menu
         ArrayList<CharSequence> options = new ArrayList<>();
-        options.add("Открыть чат (LoRa DM)");
+        options.add("Изменить никнейм");
         if (node.tgUserId != 0) {
             options.add("Отвязать от Telegram");
         } else {
@@ -236,8 +242,14 @@ public class MeshSettingsActivity extends BaseFragment
 
         b.setItems(options.toArray(new CharSequence[0]), (dialog, which) -> {
             if (which == 0) {
-                // Open Mesh DM chat
-                presentFragment(new MeshChatActivity(MeshChatActivity.contactArgs(node.pubkey, node.nickname)));
+                // Set Nickname
+                showInput("Никнейм узла", node.nickname, newName -> {
+                    if (newName != null) {
+                        MeshStorage.getInstance().updateNode(node.pubkey, newName.trim(), node.rssi, node.hops);
+                        toast("Никнейм сохранен");
+                        refreshList();
+                    }
+                });
 
             } else if (which == 1) {
                 if (node.tgUserId != 0) {
@@ -368,6 +380,37 @@ public class MeshSettingsActivity extends BaseFragment
         container.addView(editText, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 20, 8, 20, 8));
         b.setView(container);
         b.setPositiveButton("OK", (d, w) -> callback.run(editText.getText().toString()));
+        b.setNegativeButton("Отмена", null);
+        showDialog(b.create());
+    }
+
+    private void showManualAddDialog() {
+        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity());
+        b.setTitle("Новый контакт (Mesh)");
+        
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(getParentActivity());
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(AndroidUtilities.dp(20), AndroidUtilities.dp(10), AndroidUtilities.dp(20), AndroidUtilities.dp(10));
+        
+        final EditText nameEdit = new EditText(getParentActivity());
+        nameEdit.setHint("Никнейм");
+        
+        final EditText pubKeyEdit = new EditText(getParentActivity());
+        pubKeyEdit.setHint("Публичный ключ (Hex)");
+        
+        layout.addView(nameEdit, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 0, 0, 8));
+        layout.addView(pubKeyEdit, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        
+        b.setView(layout);
+        b.setPositiveButton("Добавить", (d, w) -> {
+            String name = nameEdit.getText().toString().trim();
+            String pk = pubKeyEdit.getText().toString().trim();
+            if (!pk.isEmpty()) {
+                MeshStorage.getInstance().updateNode(pk, name, 0, 0);
+                toast("Узел добавлен");
+                refreshList();
+            }
+        });
         b.setNegativeButton("Отмена", null);
         showDialog(b.create());
     }

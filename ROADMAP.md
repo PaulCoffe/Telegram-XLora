@@ -206,6 +206,17 @@
 - [x] Identified and documented integration "Hooks" in `ARCHITECTURE.md`
 - [x] Institutionalized documentation updates before every commit
 
+---
+
+## Phase 16 — UI/UX Finalization & Node Management ✅ (Complete)
+
+- [x] **Input UX Stabilization**: Enabled fluid multi-line input expansion and enforced 120-symbol limit.
+- [x] **Bubble Redesign**: Dedicated telemetry footer (Hops/SNR) with tech-aesthetic styling; corrected message alignment.
+- [x] **Node Management**: Implemented "Set Nickname" and "Link to TG Contact" workflow in settings.
+- [x] **Manual Node Discovery**: Added "Добавить узел вручную" (Manual Add) button for out-of-band contact sharing.
+- [x] **UI Purification**: Pruned redundant dot-menus in system-managed Mesh folders to reduce UI cognitive load.
+- [x] **Persistence**: Real-time DB synchronization for node metadata (RSSI/Hops) from ADVERT packets.
+
 ## Current Status (2026-04-14)
 
 | Component | Status |
@@ -217,6 +228,8 @@
 | Hybrid mode (TG ↔ LoRa) | ✅ Stable |
 | Offline queue | ✅ Stable |
 | ADVERT Real-time Discovery| ✅ Success |
+| Cyrillic UCF Encoding | ✅ Success (120 symbols) |
+| UI/UX (Bubbles/Input) | ✅ Finalized & Polished |
 | CI Build (`mesh-dev`) | ✅ Fixed & Stable |
 | Maintenance Protocol | ✅ Active |
 | Hardware QA (Heltec T114) | ✅ Final Field Test Success |

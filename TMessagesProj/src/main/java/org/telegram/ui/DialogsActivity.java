@@ -6849,9 +6849,15 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             if (filter.id == 1493 || filter.id == 1494) {
                 meshAddItem.setVisibility(View.VISIBLE);
                 searchItem.setVisibility(View.GONE);
+                if (optionsItem != null) {
+                    optionsItem.setVisibility(View.GONE);
+                }
             } else {
                 meshAddItem.setVisibility(View.GONE);
                 searchItem.setVisibility(View.VISIBLE);
+                if (optionsItem != null) {
+                    optionsItem.setVisibility(View.VISIBLE);
+                }
             }
         }
     }
