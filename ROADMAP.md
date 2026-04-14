@@ -232,6 +232,16 @@
 - [x] Renamed `AppName` to **Telegram-XLora** in Dutch (`values-nl`)
 - [x] Triggered automated build on `mesh-dev`
 
+---
+
+## Phase 18 — Urgent Build Stabilization & Telemetry Integration ✅ (Complete)
+
+- [x] Fixed structural brace imbalance in `DialogCell.java`
+- [x] Resolved missing import for `MeshStorage` in `DialogCell.java`
+- [x] Fixed syntax error (missing brace) in `MeshStorage.java`
+- [x] Implemented telemetry helpers: `getLastMessageSnr()`, `getLastMessageHops()`
+- [x] Fully integrated real-time SNR/Hops display in chat list (`DialogCell`)
+
 ## Current Status (2026-04-14)
 
 | Component | Status |
@@ -249,4 +259,5 @@
 | Maintenance Protocol | ✅ Active |
 | Hardware QA (Heltec T114) | ✅ Final Field Test Success |
 | Rebranding | ✅ Telegram-XLora Finalized |
+| Telemetry List Rendering | ✅ Integrated |
 

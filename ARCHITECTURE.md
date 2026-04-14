@@ -1,6 +1,6 @@
 # Telegram-XLora Architecture & MeshCore Integration
 
-> Last updated: 2026-04-14 — Protocol alignment v1.12.0+ | Final Rebranding v17 (App Name Finalized)
+> Last updated: 2026-04-14 — Protocol alignment v1.12.0+ | Final Rebranding v17 (Telemetry Integration v16)
 
 ## 1. Overview
 Telegram-XLora is a custom Android client based on Forkgram that integrates **MeshCore LoRa** networking via Bluetooth LE. Users can communicate without internet using BLE-connected LoRa hardware (Heltec T114, LilyGO, etc.).
@@ -115,6 +115,10 @@ CREATE TABLE device_pins (
     pin INTEGER
 );
 ```
+
+**Telemetry Retrieval Methods (v5)**:
+- `getLastMessageSnr(long dialogId)`: Queries the `messages` table for the most recent message's SNR value.
+- `getLastMessageHops(long dialogId)`: Queries the `messages` table for the most recent message's hop count.
 
 **Channel constants**:
 - **Public channel key** (slot 0): `8b3387e9c5cdea6ac9e5edbaa115cd72` (official MeshCore)
@@ -247,6 +251,7 @@ To maximize character capacity for Cyrillic text over LoRa (which has a strict ~
 | 2026-04-14 | **v13** | **Global Standardization**: Systematically renamed `dialogMessage` to `dialogMessages` across the entire project (Storage, Controllers, UI) to eliminate build mismatches. |
 | 2026-04-14 | **v14** | **UI/UX Finalization**: Implemented 'Manual Add Node', stabilized multi-line input expansion, redesigned tech-footer for chat bubbles, and pruned redundant folder menus. |
 | 2026-04-14 | **v15** | **Rebranding & CI/CD Restoration**: Finalized app renaming to **Telegram-XLora** across all localizations and fixed critical build failure in `DialogCell.java`. |
+| 2026-04-14 | **v16** | **Telemetry Integration & Structural Repair**: Resolved structural brace imbalances in `DialogCell.java` and `MeshStorage.java`, integrated SNR/Hops list rendering. |
 
 
 ---

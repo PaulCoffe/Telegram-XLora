@@ -1,5 +1,27 @@
 ---
 
+## [2026-04-14] Phase 18: Urgent Build Stabilization & Mesh Telemetry Integration (mesh-dev)
+
+### Objective
+Restore CI/CD build integrity by resolving critical structural syntax errors and missing imports in `DialogCell.java` and `MeshStorage.java`, while fully integrating real-time Mesh telemetry (SNR/Hops) into the chat list.
+
+### Changes
+1.  **Critical Build Fixes**:
+    *   **DialogCell Structural Repair**: Fixed a major brace imbalance in the `update()` method that caused variables (like `oldUnreadCount`) to fall out of scope and prematurely terminated the method's logic.
+    *   **MeshStorage Syntax Fix**: Resolved a missing closing brace in the `MeshContact` static class that blocked compilation.
+    *   **Dependency Resolution**: Added missing `org.telegram.messenger.mesh.MeshStorage` import to `DialogCell.java`.
+2.  **Telemetry Integration**:
+    *   **Backend Support**: Implemented `getLastMessageSnr(long dialogId)` and `getLastMessageHops(long dialogId)` in `MeshStorage.java` to fetch the latest telemetry data from the SQLite messages table.
+    *   **UI Integration**: Fully wired `hasMeshTelemetry`, `meshSnrTelemetry`, and `meshHopsTelemetry` fields in `DialogCell` to provide real-time signal quality and distance data in the dialog list.
+3.  **Codebase Integrity**:
+    *   Performed full-file brace balance analysis using static scripts to ensure no further structural mismatches exist in the massive 6000+ line `DialogCell.java`.
+
+### Result
+*   **Build Status**: Restored to a stable, compilable state.
+*   **Feature Completeness**: Mesh folders and dialogs now correctly display real-time signal metrics, enhancing the "High-Life" technical aesthetic of Telegram-XLora.
+
+---
+
 ## [2026-04-14] Phase 17: Rebranding Consolidation & CI/CD Restoration (mesh-dev)
 
 ### Objective
