@@ -514,6 +514,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     private int lock2Left;
 
     private boolean promoDialog;
+    private boolean hasMeshTelemetry;
+    private float meshSnrTelemetry;
+    private int meshHopsTelemetry;
 
     private boolean drawCheck1;
     private boolean drawCheck2;
@@ -3450,6 +3453,13 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                     }
                 }
             }
+        }
+        if (isMeshDialog(currentDialogId)) {
+            hasMeshTelemetry = true;
+            meshSnrTelemetry = MeshStorage.getInstance().getLastMessageSnr(currentDialogId);
+            meshHopsTelemetry = MeshStorage.getInstance().getLastMessageHops(currentDialogId);
+        } else {
+            hasMeshTelemetry = false;
         }
         if (animated && (oldUnreadCount != unreadCount || oldMarkUnread != markUnread) && (!isDialogCell || (System.currentTimeMillis() - lastDialogChangedTime) > 100)) {
                 if (countAnimator != null) {

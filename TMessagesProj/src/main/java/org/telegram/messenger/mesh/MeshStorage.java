@@ -718,5 +718,33 @@ public class MeshStorage extends SQLiteOpenHelper {
         public String pubKeyHex;
         public String name;
         public long   tgUserId;
+    /**
+     * Returns the SNR of the most recent message for a given dialog, or 0.
+     */
+    public float getLastMessageSnr(long dialogId) {
+        try (Cursor c = getReadableDatabase().query(
+                "messages", new String[]{"snr"},
+                "dialog_id = ?", new String[]{String.valueOf(dialogId)},
+                null, null, "date DESC", "1")) {
+            if (c.moveToFirst()) return c.getFloat(0);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return 0;
+    }
+
+    /**
+     * Returns the number of hops for the most recent message for a given dialog, or 0.
+     */
+    public int getLastMessageHops(long dialogId) {
+        try (Cursor c = getReadableDatabase().query(
+                "messages", new String[]{"hops"},
+                "dialog_id = ?", new String[]{String.valueOf(dialogId)},
+                null, null, "date DESC", "1")) {
+            if (c.moveToFirst()) return c.getInt(0);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return 0;
     }
 }

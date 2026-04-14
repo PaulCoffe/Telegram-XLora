@@ -172,7 +172,7 @@
 
 - [x] Restored correct `jniLibs` configuration in Gradle
 - [x] Implemented `packagingOptions` to exclude CVS metadata and fix APK merge conflicts
-- [x] Normalized `dialogMessage` (singular) naming across `MessagesController` and `TranslateController`
+- [x] Normalized `dialogMessages` (plural) naming across `MessagesController` and `TranslateController`
 - [x] Migrated `MeshManager` to `CopyOnWriteArrayList` for thread-safe listener/device management
 - [x] Hardened GATT callbacks with exhaustive null-safety
 
