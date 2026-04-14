@@ -718,6 +718,7 @@ public class MeshStorage extends SQLiteOpenHelper {
         public String pubKeyHex;
         public String name;
         public long   tgUserId;
+    }
     /**
      * Returns the SNR of the most recent message for a given dialog, or 0.
      */

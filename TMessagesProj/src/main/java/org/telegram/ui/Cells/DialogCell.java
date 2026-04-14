@@ -78,6 +78,7 @@ import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
+import org.telegram.messenger.mesh.MeshStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
@@ -3453,7 +3454,6 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                     }
                 }
             }
-        }
         if (isMeshDialog(currentDialogId)) {
             hasMeshTelemetry = true;
             meshSnrTelemetry = MeshStorage.getInstance().getLastMessageSnr(currentDialogId);
