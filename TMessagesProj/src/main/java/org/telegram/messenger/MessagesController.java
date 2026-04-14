@@ -6423,9 +6423,9 @@ public class MessagesController extends BaseController implements NotificationCe
             Integer msgId = (Integer) args[0];
             Integer newMsgId = (Integer) args[1];
             Long did = (Long) args[3];
-            ArrayList<MessageObject> dialogMessages = dialogMessage.get(did);
-            for (int i = 0; dialogMessages != null && i < dialogMessages.size(); ++i) {
-                MessageObject obj = dialogMessages.get(i);
+            ArrayList<MessageObject> dialogMessagesList = dialogMessage.get(did);
+            for (int i = 0; dialogMessagesList != null && i < dialogMessagesList.size(); ++i) {
+                MessageObject obj = dialogMessagesList.get(i);
                 if (obj != null && (obj.getId() == msgId || obj.messageOwner.local_id == msgId)) {
                     obj.messageOwner.id = newMsgId;
                     obj.messageOwner.send_state = MessageObject.MESSAGE_SEND_STATE_SENT;
@@ -12186,13 +12186,13 @@ public class MessagesController extends BaseController implements NotificationCe
                         continue;
                     }
                     if (!DialogObject.isEncryptedDialog(dialog.id) && dialog.top_message > 0) {
-                        ArrayList<MessageObject> dialogMessages = dialogMessage.get(dialog.id);
+                        ArrayList<MessageObject> dialogMessagesList = dialogMessage.get(dialog.id);
                         MessageObject lastMessage = null;
-                        if (dialogMessages != null) {
-                            for (int i = 0; i < dialogMessages.size(); ++i) {
-                                MessageObject message = dialogMessages.get(i);
+                        if (dialogMessagesList != null) {
+                            for (int i = 0; i < dialogMessagesList.size(); ++i) {
+                                MessageObject message = dialogMessagesList.get(i);
                                 if (message != null && (lastMessage == null || message.getId() > lastMessage.getId())) {
-                                    lastMessage = dialogMessages.get(i);
+                                    lastMessage = dialogMessagesList.get(i);
                                 }
                             }
                         }
@@ -20252,10 +20252,10 @@ public class MessagesController extends BaseController implements NotificationCe
                     long dialogId = DialogObject.makeEncryptedDialogId(key);
                     TLRPC.Dialog dialog = dialogs_dict.get(dialogId);
                     if (dialog != null) {
-                        ArrayList<MessageObject> dialogMessages = dialogMessage.get(dialogId);
-                        if (dialogMessages != null) {
-                            for (int i = 0; i < dialogMessages.size(); ++i) {
-                                MessageObject message = dialogMessages.get(i);
+                        ArrayList<MessageObject> dialogMessagesList = dialogMessage.get(dialogId);
+                        if (dialogMessagesList != null) {
+                            for (int i = 0; i < dialogMessagesList.size(); ++i) {
+                                MessageObject message = dialogMessagesList.get(i);
                                 if (message != null && message.messageOwner.date <= value) {
                                     message.setIsRead();
                                     updateMask |= UPDATE_MASK_READ_DIALOG_MESSAGE;

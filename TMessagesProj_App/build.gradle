@@ -129,6 +129,17 @@ android {
 
     sourceSets.debug {
         manifest.srcFile '../TMessagesProj/config/debug/AndroidManifest.xml'
+        jniLibs.srcDirs = ["src/main/jni"]
+    }
+
+    packagingOptions {
+        exclude 'jni/CVS/Entries'
+        exclude 'jni/CVS/Repository'
+        exclude 'jni/CVS/Tag'
+    }
+
+    sourceSets.main {
+        manifest.srcFile '../TMessagesProj/config/debug/AndroidManifest.xml'
     }
 
     sourceSets.HA {
