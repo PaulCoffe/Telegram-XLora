@@ -178,6 +178,16 @@
 
 ---
 
+## Phase 13 — UCF Encoding & Message Capacity Expansion ✅ (Complete)
+
+- [x] Implemented **UCF (Unicode Cyrillic Fast)** encoding in `MeshManager.java`
+- [x] Doubled Cyrillic message capacity (70 -> 120-130 characters) using 1-byte mapping
+- [x] Implemented smart fallback: UTF-8 for small messages, UCF for long Cyrillic
+- [x] Enforced hard 120-symbol limit in `ChatActivityEnterView` for Mesh dialogs
+- [x] Standardized `dialogMessages` naming across `MessagesController` and `TranslateController` to fix build failures
+
+---
+
 ## Current Status
 
 | Component | Status |

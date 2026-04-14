@@ -1,6 +1,6 @@
 # Telegram-XLora Architecture & MeshCore Integration
 
-> Last updated: 2026-04-14 — Protocol alignment v1.12.0+ | Final Stabilization v12 (Hardening)
+> Last updated: 2026-04-14 — Protocol alignment v1.12.0+ | Final Stabilization v13 (UCF-Enabled)
 
 ## 1. Overview
 Telegram-XLora is a custom Android client based on Forkgram that integrates **MeshCore LoRa** networking via Bluetooth LE. Users can communicate without internet using BLE-connected LoRa hardware (Heltec T114, LilyGO, etc.).
@@ -196,7 +196,7 @@ To match hardware ACKs to database records, `MeshManager` generates a 4-byte tok
 
 ---
 
-## 7. Security
+### 7. Security
 - **BLE Authentication**: Standard Bluetooth LE Secure Connections (OOB, Numeric Comparison, or Passkey Entry). The app listens for `ACTION_PAIRING_REQUEST`. 
   - Dynamic passkey requests (where the MeshCore OLED shows a 6-digit PIN) display the native Android system prompt for user input.
   - Consent/Numeric Comparison flows are auto-confirmed.
@@ -205,7 +205,7 @@ To match hardware ACKs to database records, `MeshManager` generates a 4-byte tok
 
 ---
 
-## 8. Threading Model
+### 8. Threading Model
 | Thread | Responsibility |
 |--------|----------------|
 | Main (UI) | All listener callbacks, NotificationCenter posts, UI updates |
@@ -217,7 +217,18 @@ To match hardware ACKs to database records, `MeshManager` generates a 4-byte tok
 
 ---
 
-## 9. Change History
+### 9. Message Encoding (UCF) [v13]
+To maximize character capacity for Cyrillic text over LoRa (which has a strict ~133-byte packet limit), the client implements **UCF (Unicode Cyrillic Fast)** encoding:
+- **Identifier**: `txt_type = 0x14`.
+- **Logic**: 
+  - Standard UTF-8 is used if the message fits within 133 bytes.
+  - UCF is used for longer messages if they only contain ASCII (0x00-0x7F) and Cyrillic (0x0400-0x047F) characters.
+  - UCF maps Cyrillic characters to a single byte (0x80-0xFF), effectively doubling capacity from 66 to 120-130 characters.
+- **UI Constraints**: A global limit of **120 characters** is enforced in the `ChatActivityEnterView` for all Mesh dialogs to guarantee delivery in a single LoRa packet.
+
+---
+
+## 10. Change History
 
 | Date | Version | Change |
 |------|---------|--------|

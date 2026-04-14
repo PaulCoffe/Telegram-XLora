@@ -6471,7 +6471,19 @@ public class ChatActivityEnterView extends FrameLayout implements
         updateFieldHint(false);
         if (messageEditText != null) {
             updateSendAsButton(parentFragment != null && parentFragment.getFragmentBeginToShow());
+            
+            // Apply 120-symbol limit for Mesh dialogs
+            if (isMeshDialog(dialog_id)) {
+                messageEditText.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(120)});
+            } else {
+                messageEditText.setFilters(new android.text.InputFilter[]{}); // Reset filters for normal TG dialogs
+            }
         }
+    }
+
+    private boolean isMeshDialog(long id) {
+        // Mesh dialog IDs are large negative numbers starting from -2,000,000,000
+        return id <= -2000000000L;
     }
 
     public void setChatInfo(TLRPC.ChatFull chatInfo) {

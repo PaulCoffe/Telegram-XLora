@@ -664,7 +664,7 @@ public class TranslateController extends BaseController {
                         getMessagesStorage().updateMessageCustomParams(dialogId, finalMessageObject.messageOwner);
                         NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.messageTranslated, finalMessageObject);
 
-                        ArrayList<MessageObject> dialogMessages = messagesController.dialogMessage.get(dialogId);
+                        ArrayList<MessageObject> dialogMessages = messagesController.dialogMessages.get(dialogId);
                         if (dialogMessages != null) {
                             for (int i = 0; i < dialogMessages.size(); ++i) {
                                 MessageObject dialogMessage = dialogMessages.get(i);
@@ -700,7 +700,7 @@ public class TranslateController extends BaseController {
                         getMessagesStorage().updateMessageCustomParams(dialogId, finalMessageObject.messageOwner);
                         NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.messageTranslated, finalMessageObject);
 
-                        ArrayList<MessageObject> dialogMessages = messagesController.dialogMessage.get(dialogId);
+                        ArrayList<MessageObject> dialogMessages = messagesController.dialogMessages.get(dialogId);
                         if (dialogMessages != null) {
                             for (int i = 0; i < dialogMessages.size(); ++i) {
                                 MessageObject dialogMessage = dialogMessages.get(i);
@@ -759,7 +759,7 @@ public class TranslateController extends BaseController {
             return;
         }
         getMessagesStorage().getStorageQueue().postRunnable(() -> {
-            final ArrayList<MessageObject> dialogMessages = messagesController.dialogMessage.get(dialogId);
+            final ArrayList<MessageObject> dialogMessages = messagesController.dialogMessages.get(dialogId);
             if (dialogMessages == null) {
                 return;
             }

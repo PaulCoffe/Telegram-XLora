@@ -169,7 +169,7 @@ public class MessagesController extends BaseController implements NotificationCe
     public ConcurrentHashMap<Long, Integer> dialogs_read_inbox_max = new ConcurrentHashMap<>(100, 1.0f, 2);
     public ConcurrentHashMap<Long, Integer> dialogs_read_outbox_max = new ConcurrentHashMap<>(100, 1.0f, 2);
     public LongSparseArray<TLRPC.Dialog> dialogs_dict = new LongSparseArray<>();
-    public LongSparseArray<ArrayList<MessageObject>> dialogMessage = new LongSparseArray<>();
+    public LongSparseArray<ArrayList<MessageObject>> dialogMessages = new LongSparseArray<>();
     public LongSparseArray<MessageObject> dialogMessagesByRandomIds = new LongSparseArray<>();
     public LongSparseIntArray deletedHistory = new LongSparseIntArray();
     public SparseArray<MessageObject> dialogMessagesByIds = new SparseArray<>();
@@ -2326,7 +2326,7 @@ public class MessagesController extends BaseController implements NotificationCe
                         ArrayList<MessageObject> newMsgs = new_dialogMessage.get(newDialog.id);
                         if (currentDialog == null) {
                             dialogs_dict.put(key, newDialog);
-                            dialogMessage.put(key, newMsgs);
+                            dialogMessages.put(key, newMsgs);
                             if (newMsgs != null) {
                                 for (int i = 0; i < newMsgs.size(); ++i) {
                                     MessageObject msg = newMsgs.get(i);
@@ -6423,7 +6423,7 @@ public class MessagesController extends BaseController implements NotificationCe
             Integer msgId = (Integer) args[0];
             Integer newMsgId = (Integer) args[1];
             Long did = (Long) args[3];
-            ArrayList<MessageObject> dialogMessagesList = dialogMessage.get(did);
+            ArrayList<MessageObject> dialogMessagesList = dialogMessages.get(did);
             for (int i = 0; dialogMessagesList != null && i < dialogMessagesList.size(); ++i) {
                 MessageObject obj = dialogMessagesList.get(i);
                 if (obj != null && (obj.getId() == msgId || obj.messageOwner.local_id == msgId)) {

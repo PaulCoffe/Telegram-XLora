@@ -50,6 +50,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class MeshManager {
     private static final String TAG = "MeshManager";
+    private static final int TXT_TYPE_PLAIN = 0x00;
+    private static final int TXT_TYPE_UCF   = 0x14;
+
     private static volatile MeshManager Instance;
 
     // ---- Nordic UART Service UUIDs (official MeshCore BLE transport) ----
@@ -1088,7 +1091,13 @@ public class MeshManager {
         if (txtType == 2) offset += 4; // skip 4-byte signature
         if (offset >= data.length) return;
 
-        String text = new String(data, offset, data.length - offset, StandardCharsets.UTF_8);
+        String text;
+        if (txtType == TXT_TYPE_UCF) {
+            text = decodeUCF(data, offset, data.length - offset);
+        } else {
+            text = new String(data, offset, data.length - offset, StandardCharsets.UTF_8);
+        }
+
         FileLog.d(TAG + ": ContactMsg from=" + pubKeyPrefix + " hops=" + pathLen + " snr=" + snr + " text='" + text + "'");
 
         final String finalPubKey = pubKeyPrefix;
@@ -1154,7 +1163,13 @@ public class MeshManager {
         offset += 7;
         if (offset >= data.length) return;
 
-        String text = new String(data, offset, data.length - offset, StandardCharsets.UTF_8);
+        String text;
+        if (txtType == TXT_TYPE_UCF) {
+            text = decodeUCF(data, offset, data.length - offset);
+        } else {
+            text = new String(data, offset, data.length - offset, StandardCharsets.UTF_8);
+        }
+
         FileLog.d(TAG + ": ChannelMsg ch=" + channelIdx + " hops=" + pathLen + " snr=" + snr + " text='" + text + "'");
 
         final int    finalCh   = channelIdx;
@@ -1187,7 +1202,17 @@ public class MeshManager {
      * Format: [0x03] [0x00] [channel_idx] [ts_LE 4 bytes] [text_UTF8]
      */
     public void sendChannelMessage(int channelIndex, String text) {
-        byte[] textBytes = text.getBytes(StandardCharsets.UTF_8);
+        byte[] textBytes;
+        int txtType = TXT_TYPE_PLAIN;
+        
+        byte[] utf8Bytes = text.getBytes(StandardCharsets.UTF_8);
+        if (utf8Bytes.length > 133 && isUCFCompatible(text)) {
+            textBytes = encodeUCF(text);
+            txtType = TXT_TYPE_UCF;
+        } else {
+            textBytes = utf8Bytes;
+        }
+
         if (textBytes.length > 133) {
             FileLog.e(TAG + ": Message too long (" + textBytes.length + " > 133)");
             return;
@@ -1195,7 +1220,7 @@ public class MeshManager {
         int ts = (int) (System.currentTimeMillis() / 1000L);
         byte[] packet = new byte[7 + textBytes.length];
         packet[0] = 0x03;
-        packet[1] = 0x00;
+        packet[1] = (byte) (txtType & 0xFF);
         packet[2] = (byte) (channelIndex & 0xFF);
         packet[3] = (byte) (ts & 0xFF);
         packet[4] = (byte) ((ts >> 8) & 0xFF);
@@ -1235,7 +1260,17 @@ public class MeshManager {
             FileLog.e(TAG + ": Invalid pubkey for DM: " + pubKeyHex);
             return;
         }
-        byte[] textBytes = text.getBytes(StandardCharsets.UTF_8);
+        byte[] textBytes;
+        int txtType = TXT_TYPE_PLAIN;
+
+        byte[] utf8Bytes = text.getBytes(StandardCharsets.UTF_8);
+        if (utf8Bytes.length > 133 && isUCFCompatible(text)) {
+            textBytes = encodeUCF(text);
+            txtType = TXT_TYPE_UCF;
+        } else {
+            textBytes = utf8Bytes;
+        }
+
         if (textBytes.length > 133) {
             FileLog.e(TAG + ": DM too long (" + textBytes.length + " > 133)");
             return;
@@ -1249,7 +1284,7 @@ public class MeshManager {
         // Header size: 1(CMD) + 1(txt_type) + 1(attempt) + 4(ts) + 6(pubkey) = 13 bytes
         byte[] packet = new byte[13 + textBytes.length];
         packet[0] = 0x02;  // CMD_SEND_MSG
-        packet[1] = 0x00;  // txt_type (0 = Plain text)
+        packet[1] = (byte) (txtType & 0xFF);
         packet[2] = 0x00;  // attempt (retry count)
         
         // Timestamp (4 bytes Little-Endian)
@@ -1534,4 +1569,45 @@ public class MeshManager {
 
     public boolean isHandshakeCompleted() { return isHandshakeComplete; }
     public void onNetworkStatusChanged(boolean online) {}
+
+    // ============================================================
+    // UCF ENCODING (Cyrillic-optimized, 1 byte per char)
+    // ============================================================
+
+    private boolean isUCFCompatible(String text) {
+        if (text == null) return false;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c > 0x7F && (c < 0x0400 || c > 0x047F)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private byte[] encodeUCF(String text) {
+        byte[] result = new byte[text.length()];
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c <= 0x7F) {
+                result[i] = (byte) c;
+            } else {
+                result[i] = (byte) (c - 0x0400 + 0x80);
+            }
+        }
+        return result;
+    }
+
+    private String decodeUCF(byte[] data, int offset, int length) {
+        char[] result = new char[length];
+        for (int i = 0; i < length; i++) {
+            int b = data[offset + i] & 0xFF;
+            if (b <= 0x7F) {
+                result[i] = (char) b;
+            } else {
+                result[i] = (char) (b - 0x80 + 0x0400);
+            }
+        }
+        return new String(result);
+    }
 }
