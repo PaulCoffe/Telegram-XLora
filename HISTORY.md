@@ -1,5 +1,22 @@
 ---
 
+## [2026-04-15] Phase 19: CI Compile Fix & Workflow NDK Simplification (mesh-dev)
+
+### Objective
+Restore GitHub Actions build by eliminating a recurring Java compilation failure in `DialogCell.java` and reduce workflow fragility by removing unused NDK setup.
+
+### Changes
+1. **CI Compile Fix (DialogCell)**:
+   - Fixed a scope error in `DialogCell.java` where Mesh avatar code referenced a variable outside of its method scope (root cause of `cannot find symbol` in CI).
+   - Mesh avatar name is now derived safely from `MessagesController.dialogs_dict` with an `instanceof MeshDialog` guard.
+2. **Workflow Hardening (NDK)**:
+   - Removed the unused **NDK r23c** install from `.github/workflows/build-apk.yml` (workflow uses r21e via `ndkVersion 21.4.7075529`).
+
+### Result
+- Expected outcome: GitHub Actions `Build Release APK` should progress past `:TMessagesProj:compileReleaseJavaWithJavac` and complete the release build.
+
+---
+
 ## [2026-04-14] Phase 18: Urgent Build Stabilization & Mesh Telemetry Integration (mesh-dev)
 
 ### Objective

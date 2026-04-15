@@ -48,12 +48,6 @@ jobs:
           ndk-version: r21e
           link-to-sdk: true
 
-      - name: Set up NDK r23c
-        uses: nttld/setup-ndk@v1.4.2
-        with:
-          ndk-version: r23c
-          link-to-sdk: true
-
       - name: Cache Native Libraries
         id: cache-native
         uses: actions/cache@v4

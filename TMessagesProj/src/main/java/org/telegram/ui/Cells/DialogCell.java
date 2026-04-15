@@ -3415,8 +3415,11 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             } else if (isMeshDialog(currentDialogId)) {
                 // Custom Mesh node avatar
                 String name = "";
-                if (dialog instanceof org.telegram.messenger.mesh.MeshDialog) {
-                    name = ((org.telegram.messenger.mesh.MeshDialog) dialog).meshName;
+                if (isDialogCell) {
+                    TLRPC.Dialog dialog = MessagesController.getInstance(currentAccount).dialogs_dict.get(currentDialogId);
+                    if (dialog instanceof org.telegram.messenger.mesh.MeshDialog) {
+                        name = ((org.telegram.messenger.mesh.MeshDialog) dialog).meshName;
+                    }
                 } else if (message != null && message.messageOwner != null && message.messageOwner.post_author != null) {
                     name = message.messageOwner.post_author;
                 }

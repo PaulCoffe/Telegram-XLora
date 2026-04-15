@@ -52,5 +52,7 @@ The project uses GitHub Actions for verification. After any merge:
 3. Monitor `gh run list`.
 4. If the build fails, use `gh run view --log` to identify the broken hook.
 
+**Workflow note**: GitHub Actions is pinned to **NDK r21e** (`ndkVersion 21.4.7075529`). Avoid adding extra NDK installs unless explicitly required, as they increase disk usage and flakiness on hosted runners.
+
 ## 5. Deployment
 Always use `./gradlew assembleRelease` to confirm that the native JNI libraries (FFmpeg, MeshCore) are correctly bundled for all architectures (`arm64-v8a` is the primary target).

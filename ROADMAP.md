@@ -241,6 +241,8 @@
 - [x] Fixed syntax error (missing brace) in `MeshStorage.java`
 - [x] Implemented telemetry helpers: `getLastMessageSnr()`, `getLastMessageHops()`
 - [x] Fully integrated real-time SNR/Hops display in chat list (`DialogCell`)
+- [x] CI compile fix: removed out-of-scope Mesh avatar reference in `DialogCell.java`
+- [x] GitHub Actions hardening: removed unused NDK r23c setup (r21e only)
 
 ## Current Status (2026-04-14)
 
