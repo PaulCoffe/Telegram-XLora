@@ -81,9 +81,6 @@ public class AuthTokensHelper {
     }
 
     public static void saveLogInToken(TLRPC.TL_auth_authorization token) {
-        if (BuildVars.DEBUG_VERSION) {
-            FileLog.d("saveLogInToken " + new String(token.future_auth_token, StandardCharsets.UTF_8));
-        }
         ArrayList<TLRPC.TL_auth_authorization> tokens = getSavedLogInTokens();
         if (tokens == null) {
             tokens = new ArrayList<>();

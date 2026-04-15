@@ -243,6 +243,7 @@
 - [x] Fully integrated real-time SNR/Hops display in chat list (`DialogCell`)
 - [x] CI compile fix: removed out-of-scope Mesh avatar reference in `DialogCell.java`
 - [x] GitHub Actions hardening: removed unused NDK r23c setup (r21e only)
+- [x] Security hardening: disable cleartext traffic, restrict providers and FileProvider paths, redact sensitive logs
 
 ## Current Status (2026-04-14)
 

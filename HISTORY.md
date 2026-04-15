@@ -20,6 +20,26 @@ Restore GitHub Actions build by eliminating a recurring Java compilation failure
 
 ---
 
+## [2026-04-15] Security Hardening: Cleartext, Providers, Sensitive Logs (mesh-dev)
+
+### Objective
+Reduce attack surface and prevent accidental secret leakage in logs and content providers.
+
+### Changes
+1. **Network security**:
+   - Disabled global cleartext traffic (`android:usesCleartextTraffic="false"`) and added `@xml/network_security_config` with `cleartextTrafficPermitted="false"`.
+2. **Content providers**:
+   - Set `.voip.CallNotificationSoundProvider` to `android:exported="false"`.
+   - Tightened `FileProvider` paths (`provider_paths.xml`) by removing overly broad `/storage` root access and restricting to app-specific directories.
+3. **Sensitive log redaction**:
+   - Removed logging of `SharedConfig.pushAuthKey` from `PushListenerController`.
+   - Removed debug logging of `future_auth_token` in `AuthTokensHelper`.
+
+### Result
+- Prevents cleartext HTTP usage by default and reduces risk of token/key leakage via logs and exported providers.
+
+---
+
 ## [2026-04-14] Phase 18: Urgent Build Stabilization & Mesh Telemetry Integration (mesh-dev)
 
 ### Objective

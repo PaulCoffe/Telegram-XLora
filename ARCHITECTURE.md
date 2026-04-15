@@ -253,6 +253,7 @@ To maximize character capacity for Cyrillic text over LoRa (which has a strict ~
 | 2026-04-14 | **v15** | **Rebranding & CI/CD Restoration**: Finalized app renaming to **Telegram-XLora** across all localizations and fixed critical build failure in `DialogCell.java`. |
 | 2026-04-14 | **v16** | **Telemetry Integration & Structural Repair**: Resolved structural brace imbalances in `DialogCell.java` and `MeshStorage.java`, integrated SNR/Hops list rendering. |
 | 2026-04-15 | **v17** | **CI Compile Fix & Workflow Simplification**: Fixed Mesh avatar scope bug in `DialogCell.java` and removed unused NDK r23c setup from GitHub Actions. |
+| 2026-04-15 | **v18** | **Security Hardening**: Disabled cleartext traffic, restricted providers/FileProvider paths, and removed sensitive token/key logging. |
 
 
 ---

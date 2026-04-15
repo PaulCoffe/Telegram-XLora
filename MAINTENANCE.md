@@ -56,5 +56,11 @@ The project uses GitHub Actions for verification. After any merge:
 
 **tde2e note**: `TMessagesProj/jni/tde2e/build-tdlib.sh` defaults to `ANDROID_NDK_VERSION=23.2.8568313`. Our native pipeline must explicitly pass the configured `android.ndkDirectory` version to avoid accidental dependence on a runner-preinstalled NDK.
 
+## 4.1 Security Baselines (Do not regress)
+- **Cleartext traffic**: keep `android:usesCleartextTraffic="false"` and prefer a strict `network_security_config`.
+- **Providers**: avoid `android:exported="true"` providers unless protected by permission + caller verification.
+- **FileProvider**: keep `provider_paths.xml` narrow (no `root-path` to `/storage`).
+- **Logging**: never log tokens/keys/secrets (push auth key, login tokens, mesh secrets/pins).
+
 ## 5. Deployment
 Always use `./gradlew assembleRelease` to confirm that the native JNI libraries (FFmpeg, MeshCore) are correctly bundled for all architectures (`arm64-v8a` is the primary target).

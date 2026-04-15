@@ -110,10 +110,11 @@
         android:requestLegacyExternalStorage="true"
         android:preserveLegacyExternalStorage="true"
         android:allowAudioPlaybackCapture="true"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:enableOnBackInvokedCallback="true"
     >
-        <!-- usesCleartextTraffic for browser supporting opening http:// links -->
+        <!-- Cleartext traffic is disabled; http:// links should be opened externally. -->
 
         <activity-alias
             android:enabled="true"
@@ -621,7 +622,7 @@
         <provider
             android:authorities="${applicationId}.call_sound_provider"
             android:name=".voip.CallNotificationSoundProvider"
-            android:exported="true"/>
+            android:exported="false"/>
 
         <receiver android:name=".ChatsWidgetProvider" android:exported="false">
             <meta-data android:name="android.appwidget.provider"
