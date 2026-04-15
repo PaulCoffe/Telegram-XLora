@@ -13,6 +13,7 @@ Restore GitHub Actions build by eliminating a recurring Java compilation failure
    - Removed the unused **NDK r23c** install from `.github/workflows/build-apk.yml` (workflow uses r21e via `ndkVersion 21.4.7075529`).
 3. **Native Deps Fix (tde2e)**:
    - Fixed `TMessagesProj/jni/prepare.py` to pass the actual Gradle NDK version (`android.ndkDirectory`) into `tde2e/build-tdlib.sh` so it doesn't default to `23.2.8568313` and fail on runners where that NDK isn't installed.
+   - Forced `tde2e/build-tdlib.sh` to use the LLVM linker (`-DANDROID_LD=lld`) to avoid GNU `ld` incompatibilities (e.g., `--icf=safe`) on CI runners.
 
 ### Result
 - Expected outcome: GitHub Actions `Build Release APK` should complete `:TMessagesProj:buildNativeDeps` and the final release build.
