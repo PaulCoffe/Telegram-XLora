@@ -988,6 +988,9 @@ public class MeshManager {
         if (data.length > 58) {
             name = extractString(data, 58, data.length - 58);
         }
+        if (name.isEmpty()) {
+            name = "Me [" + pubKeyHex.substring(0, 4) + "]";
+        }
 
         FileLog.d(TAG + ": SELF_INFO name='" + name + "' pubkey=" + pubKeyHex.substring(0, Math.min(12, pubKeyHex.length())) + "... freq=" + freqHz + " bw=" + bwKHz + " sf=" + sf + " cr=" + cr);
 
@@ -1038,12 +1041,14 @@ public class MeshManager {
         // Bytes 8+: Node name (UTF-8)
         if (data.length < 7) return;
         String pubKeyHex = bytesToHex(Arrays.copyOfRange(data, 1, 7));
-        String name = "";
         if (data.length > 8) {
             name = extractString(data, 8, data.length - 8);
         }
+        if (name.isEmpty()) {
+            name = "Mesh Node [" + pubKeyHex.substring(0, 4) + "]";
+        }
         FileLog.d(TAG + ": Contact pubkey=" + pubKeyHex + " name='" + name + "'");
-        MeshStorage.getInstance().updateNode(pubKeyHex, name.isEmpty() ? null : name, 0, 0);
+        MeshStorage.getInstance().updateNode(pubKeyHex, name, 0, 0);
     }
 
     private void parseChannelInfo(byte[] data) {
@@ -1156,11 +1161,14 @@ public class MeshManager {
         if (data.length > 9) {
             name = extractString(data, 9, data.length - 9);
         }
+        if (name.isEmpty()) {
+            name = "Mesh Node [" + pubKeyHex.substring(0, 4) + "]";
+        }
 
         FileLog.d(TAG + ": ADVERT heard from " + pubKeyHex + " rssi=" + rssi + " hops=" + hops + " name='" + name + "'");
 
         // Update storage — discovery in real-time
-        MeshStorage.getInstance().updateNode(pubKeyHex, name.isEmpty() ? null : name, rssi, hops);
+        MeshStorage.getInstance().updateNode(pubKeyHex, name, rssi, hops);
     }
 
     private void parseChannelMessage(byte[] data) {
@@ -1595,20 +1603,28 @@ public class MeshManager {
         if (len == 0) return "";
         
         try {
+            // First pass: raw UTF-8 conversion
             String str = new String(data, offset, len, StandardCharsets.UTF_8);
-            // Filter out binary headers (&3, \0, etc.) and non-printable characters
+            
+            // Second pass: aggressive sanitization
+            // We only allow: Alphanumeric, Standard Punctuation, Emojis, and whitespace.
             StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < str.length(); i++) {
-                char c = str.charAt(i);
-                // Allow letters, digits, standard punctuation, and emojis (Surrogates)
-                if (c >= 32 && c != 127 || Character.isSurrogate(c)) {
-                    sb.append(c);
+            for (int i = 0; i < str.length(); ) {
+                int codePoint = str.codePointAt(i);
+                if (Character.isLetterOrDigit(codePoint) || 
+                    Character.isSpaceChar(codePoint) ||
+                    isAcceptedPunctuation(codePoint) ||
+                    isEmoji(codePoint)) {
+                    sb.append(Character.toChars(codePoint));
                 }
+                i += Character.charCount(codePoint);
             }
+            
             String result = sb.toString().trim();
             
-            // Protection against binary artifacts like "&3" observed in software logs
-            if (result.startsWith("&") && result.length() > 2 && Character.isDigit(result.charAt(1))) {
+            // Filter out common MeshCore/Wardrive binary artifacts (e.g., "&3", "\0", raw PK prefixes)
+            if (result.length() < 2 && !result.isEmpty() && !isEmoji(result.codePointAt(0))) return "";
+            if (result.startsWith("&") && result.length() > 1 && Character.isDigit(result.charAt(1))) {
                 result = result.substring(2).trim();
             }
             
@@ -1617,6 +1633,21 @@ public class MeshManager {
             return "";
         }
     }
+
+    private static boolean isAcceptedPunctuation(int cp) {
+        return cp == '.' || cp == ',' || cp == '!' || cp == '?' || cp == '(' || cp == ')' || 
+               cp == '-' || cp == '_' || cp == '+' || cp == '=' || cp == '@' || cp == '#';
+    }
+
+    private static boolean isEmoji(int cp) {
+        // Simple heuristic for common emoji ranges
+        return (cp >= 0x1F300 && cp <= 0x1F9FF) || // Misc Symbols & Pictographs +
+               (cp >= 0x2600 && cp <= 0x26FF)   || // Misc Symbols
+               (cp >= 0x2700 && cp <= 0x27BF)   || // Dingbats
+               (cp >= 0x1F600 && cp <= 0x1F64F) || // Emoticons
+               (cp >= 0x1F900 && cp <= 0x1F9FF);   // Supplemental Symbols and Pictographs
+    }
+
 
     public boolean isHandshakeCompleted() { return isHandshakeComplete; }
     public void onNetworkStatusChanged(boolean online) {}

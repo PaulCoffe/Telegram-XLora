@@ -392,8 +392,9 @@ public class AvatarDrawable extends Drawable {
 
     private static String takeFirstCharacter(String text) {
         ArrayList<Emoji.EmojiSpanRange> ranges = Emoji.parseEmojis(text);
-        if (ranges != null && !ranges.isEmpty() && ranges.get(0).start == 0) {
-            return text.substring(0, ranges.get(0).end);
+        if (ranges != null && !ranges.isEmpty()) {
+            Emoji.EmojiSpanRange firstRange = ranges.get(0);
+            return text.substring(firstRange.start, firstRange.end);
         }
         return text.substring(0, text.offsetByCodePoints(0, Math.min(text.codePointCount(0, text.length()), 1)));
     }
@@ -514,29 +515,50 @@ public class AvatarDrawable extends Drawable {
         if (custom != null) {
             result.append(custom);
         } else {
+            String emojiInFirst = null;
+            String emojiInLast = null;
             if (firstName != null && firstName.length() > 0) {
-                result.append(takeFirstCharacter(firstName));
+                ArrayList<Emoji.EmojiSpanRange> ranges = Emoji.parseEmojis(firstName);
+                if (ranges != null && !ranges.isEmpty()) {
+                    emojiInFirst = firstName.substring(ranges.get(0).start, ranges.get(0).end);
+                }
             }
             if (lastName != null && lastName.length() > 0) {
-                String lastNameLastWord = lastName;
-                int index;
-                if ((index = lastNameLastWord.lastIndexOf(' ')) >= 0) {
-                    lastNameLastWord = lastNameLastWord.substring(index + 1);
+                ArrayList<Emoji.EmojiSpanRange> ranges = Emoji.parseEmojis(lastName);
+                if (ranges != null && !ranges.isEmpty()) {
+                    emojiInLast = lastName.substring(ranges.get(0).start, ranges.get(0).end);
                 }
-                if (Build.VERSION.SDK_INT > 17) {
-                    result.append("\u200C");
+            }
+
+            if (emojiInFirst != null) {
+                result.append(emojiInFirst);
+            } else if (emojiInLast != null) {
+                result.append(emojiInLast);
+            } else {
+                if (firstName != null && firstName.length() > 0) {
+                    result.append(takeFirstCharacter(firstName));
                 }
-                result.append(takeFirstCharacter(lastNameLastWord));
-            } else if (firstName != null && firstName.length() > 0) {
-                for (int a = firstName.length() - 1; a >= 0; a--) {
-                    if (firstName.charAt(a) == ' ') {
-                        if (a != firstName.length() - 1 && firstName.charAt(a + 1) != ' ') {
-                            int index = result.length();
-                            if (Build.VERSION.SDK_INT > 17) {
-                                result.append("\u200C");
+                if (lastName != null && lastName.length() > 0) {
+                    String lastNameLastWord = lastName;
+                    int index;
+                    if ((index = lastNameLastWord.lastIndexOf(' ')) >= 0) {
+                        lastNameLastWord = lastNameLastWord.substring(index + 1);
+                    }
+                    if (Build.VERSION.SDK_INT > 17) {
+                        result.append("\u200C");
+                    }
+                    result.append(takeFirstCharacter(lastNameLastWord));
+                } else if (firstName != null && firstName.length() > 0) {
+                    for (int a = firstName.length() - 1; a >= 0; a--) {
+                        if (firstName.charAt(a) == ' ') {
+                            if (a != firstName.length() - 1 && firstName.charAt(a + 1) != ' ') {
+                                int index = result.length();
+                                if (Build.VERSION.SDK_INT > 17) {
+                                    result.append("\u200C");
+                                }
+                                result.append(takeFirstCharacter(firstName.substring(index)));
+                                break;
                             }
-                            result.append(takeFirstCharacter(firstName.substring(index)));
-                            break;
                         }
                     }
                 }

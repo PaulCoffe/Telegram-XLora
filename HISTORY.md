@@ -198,7 +198,19 @@ Finalize the Mesh integration by bridging LoRa message history into the standard
    - **DialogCell**: Integrated orange telemetry line (SNR/Hops) and added a "Plus" icon to the Mesh folder for node management.
    - **ChatMessageCell**: Appends real-time hop count telemetry (`Mesh H{n}`) to the message timestamp footer.
 3. **Routing & Interception**:
-   - **MessagesController**: Intercepted `loadMessagesInternal()` to redirect history loading for synthetic dialog IDs (< -2B) to `MeshStorage`.
+   - **MessagesController**: Intercepted `loadMessagesInternal()` to# 📝 Project History
+
+## Session: Premium UI & Universal Telemetry Integration (2026-04-15)
+### Accomplishments:
+- **Input Constraints**: Enforced a strict 120-character limit for all Mesh dialog inputs in `ChatActivityEnterView`.
+- **Premium Branding**: Enhanced `AvatarDrawable` to prioritize emojis found anywhere in Mesh contact names.
+- **Advanced Gradients**: Enabled PK-based premium gradients for all Mesh avatars in `DialogCell`.
+- **Universal Telemetry**: Integrated real-time SNR and Hops display in both the chat list (`DialogCell`) and message bubbles (`ChatMessageCell`).
+- **Telemetry Formatting**: ENSURED telemetry is right-aligned for outgoing messages and clearly visible in the bubble footer.
+
+---
+
+# 📝 Project History (Continued) loading for synthetic dialog IDs (< -2B) to `MeshStorage`.
    - **SendMessagesHelper**: Intercepted sending flow to handle Mesh-specific routing and added a `Bulletin` UI warning for disconnected BLE devices.
 
 ---

@@ -173,27 +173,39 @@ CREATE TABLE device_pins (
 ### 5.1 Synthetic ID Routing
 The `MessagesController` intercepts `loadMessagesInternal()` for dialog IDs < -2,000,000,000. It redirects history fetching to `MeshStorage.getMessages()`, wrapping the results into standard `MessageObject` instances with `isMesh = true` and storing them in the consistently named `dialogMessages` plural field. This standardized naming convention ensures seamless coexistence with Telegram chats and prevents compilation mismatches across the codebase.
 
-### 5.2 Message Delivery Lifecycle (3 Stages)
-### 2.2. Messaging UI
-- **Unified Telemetry**: Mesh SNR/Hops are drawn in `ChatMessageCell.drawClockOrErrorLayout` using standard themed colors, replacing legacy neon styles.
-- **Adaptive Input**: `ChatActivityEnterView` enforces a 120-character limit for Mesh with early counter visibility.
-- **Identity Fallback**: `DialogCell` resolves empty nicknames to `Node-[short_pk]` format to prevent corrupted text.
+### 5.2 Premium UI & Mesh Visualization
+To maintain Telegram-XLora's "premium" feel, Mesh-specific UI elements are integrated with deep hooks:
+- **Character Limits**: Enforced 120-char limit for LoRa packets in `ChatActivityEnterView` to ensure protocol compatibility without UI fragmentation.
+- **Emoji-First Avatars**: `AvatarDrawable` prioritizes parsing emojis from node names to create recognizable, vibrant identification marks.
+- **Dynamic Gradients**: `setInfo` in `DialogCell` uses `advancedGradient = true` and hashes the node's public key (via its synthetic ID) to ensure consistent, unique coloring for every Mesh contact.
+- **Universal Telemetry Hub**: 
+    - `DialogCell`: Injects SNR/Hops into the message preview line.
+    - `ChatMessageCell`: Renders detailed signal metrics (SNR/Hops) within the message footer, utilizing `Theme.chat_timePaint` for stylistic consistency.
+
+### 5.3 Message Delivery Lifecycle (3 Stages)
 - **0 (Pending)**: Renders the **Clock** icon. Message is waiting for BLE connection or queue flush.
 - **1 (Sent to LoRa)**: Renders a **Single Check**. The LoRa device has accepted the packet for radio transmission.
 - **2 (Delivered)**: Renders **Double Checks**. A delivery ACK was received from the mesh network.
 - **3 (Failed)**: Red exclamation/error state.
 
-### 5.3 Deterministic ACK Matching
+### 5.4 Deterministic ACK Matching
 To match hardware ACKs to database records, `MeshManager` generates a 4-byte token derived from the command packet (e.g., `[CMD] [0x00] [Slot] [TS_Low]`). This token is stored as `mesh_msg_id` and matched against the `PACKET_ACK` payload (echo of the first 4 bytes of the command).
 
-### 5.4 UI Telemetry
-- **DialogCell**: Renders an orange telemetry line below the last message (SNR: {x} | Path: {y} hops).
-- **ChatMessageCell**: Appends ` | Mesh H{n}` to the timestamp footer in chat bubbles.
-- **Error Handling**: `SendMessagesHelper` shows a `Bulletin` notification if sending is attempted while the BLE device is disconnected, confirming the message is queued.
+### 4. UI Telemetry & Branding
+#### 4.1. Adjusting Character Limits
+The 120-character limit is enforced in `ChatActivityEnterView.isMeshDialog`. To modify this, search for `EXTRA_TEXT_LIMIT_MESH`.
+
+#### 4.2. Avatar Logic
+Emoji prioritization in avatars is handled in `AvatarDrawable.getAvatarSymbols`. It uses `Emoji.parseEmojis` to extract the first available emoji from any position in the user's name.
+
+#### 4.3. Telemetry Rendering
+SNR and Hops are rendered in:
+- **Chat List**: `DialogCell.update()` (appended to `messageString`).
+- **Bubbles**: `ChatMessageCell.drawTimeInternal()`. Metric formatting follows protocol v5 (SNR as float in storage, int in UI).
 
 ---
 
-### 6. Mesh Folders (Virtual Dialog Folders)
+## 6. Mesh Folders (Virtual Dialog Folders)
 - **Mesh Channels (1493)**: Populated via `MeshStorage.getLoraChannels()`.
   - Slot 0 (Public) is always shown.
   - Slots 1-7 are shown only if they have a non-empty, user-defined name.
@@ -206,7 +218,7 @@ To match hardware ACKs to database records, `MeshManager` generates a 4-byte tok
 
 ---
 
-### 7. Security
+## 7. Security
 - **BLE Authentication**: Standard Bluetooth LE Secure Connections (OOB, Numeric Comparison, or Passkey Entry). The app listens for `ACTION_PAIRING_REQUEST`. 
   - Dynamic passkey requests (where the MeshCore OLED shows a 6-digit PIN) display the native Android system prompt for user input.
   - Consent/Numeric Comparison flows are auto-confirmed.
@@ -215,7 +227,7 @@ To match hardware ACKs to database records, `MeshManager` generates a 4-byte tok
 
 ---
 
-### 8. Threading Model
+## 8. Threading Model
 | Thread | Responsibility |
 |--------|----------------|
 | Main (UI) | All listener callbacks, NotificationCenter posts, UI updates |
@@ -227,7 +239,7 @@ To match hardware ACKs to database records, `MeshManager` generates a 4-byte tok
 
 ---
 
-### 9. Message Encoding (UCF) [v13]
+## 9. Message Encoding (UCF) [v13]
 To maximize character capacity for Cyrillic text over LoRa (which has a strict ~133-byte packet limit), the client implements **UCF (Unicode Cyrillic Fast)** encoding:
 - **Identifier**: `txt_type = 0x14`.
 - **Logic**: 
@@ -262,6 +274,10 @@ To maximize character capacity for Cyrillic text over LoRa (which has a strict ~
 | 2026-04-15 | **v18** | **Security Hardening**: Disabled cleartext traffic, restricted providers/FileProvider paths, and removed sensitive token/key logging. |
 | 2026-04-15 | **v19** | **Connectivity (Phase 18)**: Implemented Persistent Auto-Reconnect (background pulse) and Automated PIN Entry using `MeshStorage`. |
 
+- [x] **Phase 1: MeshCore Framework Stabilization** (Logcat Analysis, Dedup Logic)
+- [x] **Phase 2: Premium UI Restoration** (Emoji Avatars, Advanced Gradients)
+- [x] **Phase 3: Universal Telemetry** (SNR/Hops Integration in all cells)
+- [ ] **Phase 4: Multi-Node Mesh Routing** (Advanced HOP optimization)
 
 ---
 

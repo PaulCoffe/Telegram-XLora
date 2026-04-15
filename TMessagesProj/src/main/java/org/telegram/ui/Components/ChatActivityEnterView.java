@@ -5796,6 +5796,9 @@ public class ChatActivityEnterView extends FrameLayout implements
                 int beforeLimit;
                 codePointCount = Character.codePointCount(editable, 0, editable.length());
                 boolean isMesh = isMeshDialog(dialog_id);
+                if (isMesh) {
+                    currentLimit = 120;
+                }
                 int limitThreshold = isMesh ? 120 : (isLiveComment ? 5 : 100);
                 
                 boolean doneButtonEnabledLocal = true;
@@ -6668,6 +6671,8 @@ public class ChatActivityEnterView extends FrameLayout implements
                     } else {
                         messageEditText.setHintText(getString("ChannelBroadcast", R.string.ChannelBroadcast), animated);
                     }
+                } else if (isMeshDialog(dialog_id)) {
+                    messageEditText.setHintText("Mesh: макс. 120 симв.");
                 } else {
                     messageEditText.setHintText(getString(R.string.TypeMessage));
                 }

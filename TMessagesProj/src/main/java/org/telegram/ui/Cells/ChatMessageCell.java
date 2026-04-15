@@ -23699,6 +23699,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
 
             canvas.save();
             canvas.translate(drawTimeX = timeTitleTimeX + additionalX, drawTimeY = timeY - dp(7.3f) - timeLayout.getHeight());
+            if (currentMessageObject.isMesh) {
+                String meshInfo = String.format("SNR: %d | Hops: %d", currentMessageObject.snr, currentMessageObject.hops);
+                canvas.drawText(meshInfo, -Theme.chat_timePaint.measureText(meshInfo) - dp(4), timeLayout.getHeight() - dp(1), Theme.chat_timePaint);
+            }
             SpoilerEffect.layoutDrawMaybe(timeLayout, canvas);
             canvas.restore();
             Theme.chat_timePaint.setAlpha(255);
@@ -23791,6 +23795,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 }
             } else {
                 canvas.translate(drawTimeX = timeTitleTimeX + additionalX, drawTimeY = layoutHeight - dp(pinnedBottom || pinnedTop ? 7.5f : 6.5f) - timeLayout.getHeight() + timeYOffset);
+                if (currentMessageObject.isMesh) {
+                    String meshInfo = String.format("SNR: %d | Hops: %d", currentMessageObject.snr, currentMessageObject.hops);
+                    canvas.drawText(meshInfo, -Theme.chat_timePaint.measureText(meshInfo) - dp(4), timeLayout.getHeight() - dp(1), Theme.chat_timePaint);
+                }
                 SpoilerEffect.layoutDrawMaybe(timeLayout, canvas);
             }
             canvas.restore();

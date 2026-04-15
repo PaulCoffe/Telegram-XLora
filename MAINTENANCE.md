@@ -26,7 +26,21 @@ When updating the base Telegram code, these files are the most likely to cause c
 | File | Integration Role |
 |------|------------------|
 | `MessagesController.java` | Intercepts history and dialog filtering |
-| `SendMessagesHelper.java` | Routes outgoing messages to LoRa when offline |
+| `SendMessagesHelper.java`### 4. UI Telemetry & Branding
+#### 4.1. Adjusting Character Limits
+The 120-character limit is enforced in `ChatActivityEnterView.isMeshDialog`. To modify this, search for `EXTRA_TEXT_LIMIT_MESH`.
+
+#### 4.2. Avatar Logic
+Emoji prioritization in avatars is handled in `AvatarDrawable.getAvatarSymbols`. It uses `Emoji.parseEmojis` to extract the first available emoji from any position in the user's name.
+
+#### 4.3. Telemetry Rendering
+SNR and Hops are rendered in:
+- **Chat List**: `DialogCell.update()` (appended to `messageString`).
+- **Bubbles**: `ChatMessageCell.drawTimeInternal()`. Metric formatting follows protocol v5 (SNR as float in storage, int in UI).
+
+---
+
+## 5. Troubleshooting (Deep Dive)s to LoRa when offline |
 | `DialogsActivity.java` | Renders Mesh folders and virtual entries |
 | `ChatMessageCell.java` | Renders Mesh-specific status icons and telemetry |
 | `ApplicationLoader.java` | Initializes `MeshManager` and background service |
