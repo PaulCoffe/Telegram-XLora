@@ -245,22 +245,23 @@
 - [x] GitHub Actions hardening: removed unused NDK r23c setup (r21e only)
 - [x] Security hardening: disable cleartext traffic, restrict providers and FileProvider paths, redact sensitive logs
 
-## Current Status (2026-04-14)
+---
+
+## Phase 19 — Final UI/UX Purification & Consistency ✅ (Complete)
+
+- [x] **Naming Fallback**: Implemented robust `Node-[short_pk]` resolution for empty nicknames in `DialogCell`.
+- [x] **Avatar Logic**: Standardized Mesh contact avatars to initials/themed colors; removed random Telegram icons.
+- [x] **Clean Telemetry**: Consolidated SNR/Hops display into `drawClockOrErrorLayout` with native Telegram styling.
+- [x] **UI De-Cluttering**: Removed legacy "neon" UI artifacts and tech-aesthetic borders from chat bubbles.
+- [x] **Adaptive Input**: Enforced 120-symbol limit and enabled fluid multi-line expansion (max 10 lines) for Mesh dialogs.
+- [x] **Message Alignment**: Verified and enforced Right (Out) / Left (In) alignment for Mesh messages.
+
+## Current Status (2026-04-15)
 
 | Component | Status |
 |-----------|--------|
-| BLE / GATT stack | ✅ Production-Grade |
-| MeshStorage v5 | ✅ Stable |
-| MeshTransportManager | ✅ Stable |
-| Virtual Mesh folder (UI) | ✅ Stable & Filtered |
-| Hybrid mode (TG ↔ LoRa) | ✅ Stable |
-| Offline queue | ✅ Stable |
-| ADVERT Real-time Discovery| ✅ Success |
-| Cyrillic UCF Encoding | ✅ Success (120 symbols) |
-| UI/UX (Bubbles/Input) | ✅ Finalized & Polished |
-| CI Build (`mesh-dev`) | ✅ Fixed & Stable |
-| Maintenance Protocol | ✅ Active |
-| Hardware QA (Heltec T114) | ✅ Final Field Test Success |
-| Rebranding | ✅ Telegram-XLora Finalized |
-| Telemetry List Rendering | ✅ Integrated |
+| UI/UX Consistency | ✅ Finalized & Polished |
+| Naming Fallback | ✅ Robust |
+| Input Capacity | ✅ 120 Symbols |
+| CI Build (`mesh-dev`) | ✅ Stable |
 

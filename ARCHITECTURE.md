@@ -171,7 +171,10 @@ CREATE TABLE device_pins (
 The `MessagesController` intercepts `loadMessagesInternal()` for dialog IDs < -2,000,000,000. It redirects history fetching to `MeshStorage.getMessages()`, wrapping the results into standard `MessageObject` instances with `isMesh = true` and storing them in the consistently named `dialogMessages` plural field. This standardized naming convention ensures seamless coexistence with Telegram chats and prevents compilation mismatches across the codebase.
 
 ### 5.2 Message Delivery Lifecycle (3 Stages)
-We map the `status` column from `MeshStorage` to standard Telegram status icons in `ChatMessageCell.createStatusDrawableParams()`:
+### 2.2. Messaging UI
+- **Unified Telemetry**: Mesh SNR/Hops are drawn in `ChatMessageCell.drawClockOrErrorLayout` using standard themed colors, replacing legacy neon styles.
+- **Adaptive Input**: `ChatActivityEnterView` enforces a 120-character limit for Mesh with early counter visibility.
+- **Identity Fallback**: `DialogCell` resolves empty nicknames to `Node-[short_pk]` format to prevent corrupted text.
 - **0 (Pending)**: Renders the **Clock** icon. Message is waiting for BLE connection or queue flush.
 - **1 (Sent to LoRa)**: Renders a **Single Check**. The LoRa device has accepted the packet for radio transmission.
 - **2 (Delivered)**: Renders **Double Checks**. A delivery ACK was received from the mesh network.

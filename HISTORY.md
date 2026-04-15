@@ -1,5 +1,30 @@
 ---
 
+## [2026-04-15] Phase 20: Final UI/UX Overhaul & Consistency Purification (mesh-dev)
+
+### Objective
+Achieve a professional, native Telegram aesthetic for the MeshCore integration by eliminating experimental "neon" artifacts, resolving corrupted naming, and implementing a high-capacity adaptive input field.
+
+### Changes
+1. **Dialog List (`DialogCell.java`)**:
+   - **Identity Fallback**: Implemented robust `Node-[short_pk]` resolution for empty nicknames (fixes "abracadabra" corrupted text issues).
+   - **Avatar Standardization**: Fixed random avatar assignment; Mesh contacts now use consistent initials and themed colors based on their node identity.
+2. **Message Bubbles (`ChatMessageCell.java`)**:
+   - **Clean Telemetry**: Consolidated SNR and Hops display into the message footer (`drawClockOrErrorLayout`) using standard Telegram themed colors.
+   - **Aesthetic Purification**: Removed all legacy "neon" tower icons, technical borders, and experimental drawing paths to reduce UI clutter.
+   - **Alignment Correction**: Enforced standard message alignment (Outbound: Right, Inbound: Left) for Mesh dialogs.
+3. **Input Field (`ChatActivityEnterView.java`)**:
+   - **Adaptive Capacity**: Enforced a hard 120-symbol limit for Mesh chats with fluid multi-line expansion (max 10 lines).
+   - **Live Counter**: Implemented a responsive character counter that appears earlier for Mesh dialogs to provide immediate feedback on message length constraints.
+4. **Documentation**:
+   - Synchronized `ARCHITECTURE.md`, `ROADMAP.md`, and `HISTORY.md` as per the `AGENTS.md` v7.4 protocol.
+
+### Result
+- **UX**: The Mesh experience now feels like an integral, premium part of the Telegram-XLora client rather than an experimental plugin.
+- **Build**: Ready for final CI deployment on `mesh-dev`.
+
+---
+
 ## [2026-04-15] Phase 19: CI Compile Fix & Workflow NDK Simplification (mesh-dev)
 
 ### Objective

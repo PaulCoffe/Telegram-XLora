@@ -1194,7 +1194,15 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         }
 
         if (meshDialog != null) {
-            nameString = meshDialog.meshName;
+            String nodeName = meshDialog.meshName;
+            if (TextUtils.isEmpty(nodeName)) {
+                if (!TextUtils.isEmpty(meshDialog.pubKeyHex)) {
+                    nodeName = "Node " + meshDialog.pubKeyHex.substring(0, Math.min(meshDialog.pubKeyHex.length(), 6)).toUpperCase();
+                } else {
+                    nodeName = "Mesh Node";
+                }
+            }
+            nameString = nodeName;
             String time = LocaleController.stringForMessageListDate(meshDialog.last_message_date);
             String path = meshDialog.hops > 0 ? meshDialog.hops + " hops" : "Direct";
             messageString = String.format("SNR: %.1fdB | %s | Path: %s", meshDialog.snr, time, path);
@@ -3413,17 +3421,22 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 avatarDrawable.setAvatarType(AvatarDrawable.AVATAR_TYPE_ARCHIVED);
                 avatarImage.setImage(null, null, avatarDrawable, null, user, 0);
             } else if (isMeshDialog(currentDialogId)) {
-                // Custom Mesh node avatar
                 String name = "";
                 if (isDialogCell) {
                     TLRPC.Dialog dialog = MessagesController.getInstance(currentAccount).dialogs_dict.get(currentDialogId);
                     if (dialog instanceof org.telegram.messenger.mesh.MeshDialog) {
                         name = ((org.telegram.messenger.mesh.MeshDialog) dialog).meshName;
+                        if (TextUtils.isEmpty(name) && !TextUtils.isEmpty(((org.telegram.messenger.mesh.MeshDialog) dialog).pubKeyHex)) {
+                            name = "Node " + ((org.telegram.messenger.mesh.MeshDialog) dialog).pubKeyHex.substring(0, Math.min(((org.telegram.messenger.mesh.MeshDialog) dialog).pubKeyHex.length(), 6)).toUpperCase();
+                        }
                     }
                 } else if (message != null && message.messageOwner != null && message.messageOwner.post_author != null) {
                     name = message.messageOwner.post_author;
                 }
-                avatarDrawable.setInfo(currentDialogId, name, null, null);
+                if (TextUtils.isEmpty(name)) {
+                    name = "Mesh";
+                }
+                avatarDrawable.setInfo(5, name, null);
                 avatarImage.setForUserOrChat(null, avatarDrawable);
             } else {
                 if (useFromUserAsAvatar && message != null) {

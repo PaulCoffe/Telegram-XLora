@@ -20133,58 +20133,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
         }
         if (!wasLayout || forcedLayout) {
             onLayout(false, getLeft(), getTop(), getRight(), getBottom());
-        }
-
-        if (currentMessageObject != null && currentMessageObject.isMesh) {
-            if (meshBackgroundPaint == null) {
-                meshBackgroundPaint = new Paint();
-                meshBackgroundPaint.setColor(0xFF050505);
-                meshBackgroundPaint.setStyle(Paint.Style.FILL);
-
-                meshBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                meshBorderPaint.setColor(0xFF39FF14);
-                meshBorderPaint.setStyle(Paint.Style.STROKE);
-                meshBorderPaint.setStrokeWidth(dp(1.5f));
-
-                meshTelemetryPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                meshTelemetryPaint.setColor(0xFF39FF14);
-                meshTelemetryPaint.setTextSize(dp(10));
-                meshTelemetryPaint.setTypeface(Typeface.MONOSPACE);
-            }
-
-            boolean isOut = currentMessageObject.isOutOwner();
-            int backgroundWidth = this.backgroundWidth;
-            int left, right;
-            
-            if (isOut) {
-                right = getMeasuredWidth() - dp(10);
-                left = right - backgroundWidth;
-            } else {
-                left = dp(isAvatarVisible ? 48 : 10);
-                right = left + backgroundWidth;
-            }
-
-            int top = backgroundDrawableTop;
-            int bottom = backgroundDrawableBottom;
-
-            rect.set(left, top, right, bottom);
-            canvas.drawRoundRect(rect, dp(6), dp(6), meshBackgroundPaint);
-            canvas.drawRoundRect(rect, dp(6), dp(6), meshBorderPaint);
-
-            // Draw technical corners (styling)
-            float cl = dp(6);
-            canvas.drawLine(left, top + cl, left, top, meshBorderPaint);
-            canvas.drawLine(left, top, left + cl, top, meshBorderPaint);
-            canvas.drawLine(right - cl, top, right, top, meshBorderPaint);
-            canvas.drawLine(right, top, right, top + cl, meshBorderPaint);
-
-            // Telemetry below message
-            String telemetry = String.format("MESH | H:%d | SNR:%d", currentMessageObject.hops, currentMessageObject.snr);
-            if (currentMessageObject.isSent()) {
-                telemetry += " | OK";
-            }
-            canvas.drawText(telemetry, left + dp(10), bottom - dp(8), meshTelemetryPaint);
-
+            // Mesh drawing removed - consolidated in drawClockOrErrorLayout
             return;
         }
 
@@ -23842,16 +23791,6 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 }
             } else {
                 canvas.translate(drawTimeX = timeTitleTimeX + additionalX, drawTimeY = layoutHeight - dp(pinnedBottom || pinnedTop ? 7.5f : 6.5f) - timeLayout.getHeight() + timeYOffset);
-                if (currentMessageObject != null && currentMessageObject.isMesh) {
-                    canvas.save();
-                    String meshMetadata = String.format("Mesh Route H%d S%d", currentMessageObject.hops, currentMessageObject.snr);
-                    float metadataWidth = Theme.chat_timePaint.measureText(meshMetadata);
-                    float indicatorX = -dp(12) - metadataWidth + Theme.chat_timePaint.measureText("Mesh");
-                    Theme.chat_timePaint.setAlpha((int) (Theme.chat_timePaint.getAlpha() * 0.7f));
-                    canvas.drawText(meshMetadata, indicatorX, 0, Theme.chat_timePaint);
-                    Theme.chat_timePaint.setAlpha(255);
-                    canvas.restore();
-                }
                 SpoilerEffect.layoutDrawMaybe(timeLayout, canvas);
             }
             canvas.restore();
@@ -24026,18 +23965,21 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             } else if (drawError) {
                 statusText = "FAILED";
             } else {
-                statusText = "MESH";
-                if (currentMessageObject.snr != 0 || currentMessageObject.hops != 0) {
-                    statusText += String.format(" [%s%ddB|H%d]", currentMessageObject.snr > 0 ? "+" : "", currentMessageObject.snr, currentMessageObject.hops);
+                if (currentMessageObject.hops > 0) {
+                    statusText = String.format("%d Hops", currentMessageObject.hops);
+                } else {
+                    statusText = "Direct";
+                }
+                if (currentMessageObject.snr != 0) {
+                    statusText += String.format(" • SNR: %d dB", currentMessageObject.snr);
                 }
             }
 
-            if (!statusText.isEmpty() && !currentMessageObject.isOutOwner()) {
+            if (!statusText.isEmpty()) {
                 if (meshTelemetryPaint == null) {
                     meshTelemetryPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                    meshTelemetryPaint.setColor(0xFF39FF14);
-                    meshTelemetryPaint.setTextSize(dp(9));
-                    meshTelemetryPaint.setTypeface(Typeface.MONOSPACE);
+                    meshTelemetryPaint.setColor(getThemedColor(drawSelectionBackground ? Theme.key_chat_outSentClockSelected : Theme.key_chat_mediaSentClock));
+                    meshTelemetryPaint.setTextSize(dp(10));
                 }
                 meshTelemetryPaint.setAlpha((int) (255 * alpha));
                 
@@ -24049,24 +23991,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 }
                 float x = timeX + (currentMessageObject.scheduled ? 0 : dp(11));
                 
-                // --- NEW PREMIUM MESH ICON (Radio Tower) ---
-                canvas.save();
-                canvas.translate(x, timeY - dp(1));
-                meshTelemetryPaint.setStyle(Paint.Style.STROKE);
-                meshTelemetryPaint.setStrokeWidth(dp(1.2f));
-                // Vertical Mast
-                canvas.drawLine(0, 0, 0, -dp(7), meshTelemetryPaint);
-                // Signal Arcs
-                float arcR = dp(3);
-                rect.set(-arcR, -dp(10), arcR, -dp(4));
-                canvas.drawArc(rect, -150, 120, false, meshTelemetryPaint);
-                arcR = dp(5);
-                rect.set(-arcR, -dp(12), arcR, -dp(2));
-                canvas.drawArc(rect, -150, 120, false, meshTelemetryPaint);
-                canvas.restore();
-                
-                meshTelemetryPaint.setStyle(Paint.Style.FILL);
-                canvas.drawText(statusText, x + dp(8), timeY, meshTelemetryPaint);
+                canvas.drawText(statusText, x, timeY, meshTelemetryPaint);
                 invalidate();
                 return;
             }

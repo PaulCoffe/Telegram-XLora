@@ -5602,11 +5602,15 @@ public class ChatActivityEnterView extends FrameLayout implements
         messageEditText.setInputType(commonInputType = (messageEditText.getInputType() | EditorInfo.TYPE_TEXT_FLAG_CAP_SENTENCES | EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE));
         updateFieldHint(false);
         messageEditText.setSingleLine(false);
-        messageEditText.setMaxLines(6);
+        if (isMeshDialog(dialog_id)) {
+            messageEditText.setMaxLines(10);
+            messageEditText.setPadding(dp(12), dp(9), dp(12), dp(9));
+        } else {
+            messageEditText.setMaxLines(6);
+            messageEditText.setPadding(0, dp(9), 0, dp(10));
+        }
         messageEditText.setHorizontallyScrolling(false);
         messageEditText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
-        messageEditText.setGravity(Gravity.BOTTOM);
-        messageEditText.setPadding(0, dp(9), 0, dp(10));
         messageEditText.setBackgroundDrawable(null);
         messageEditText.setTextColor(getThemedColor(Theme.key_chat_messagePanelText));
         messageEditText.setLinkTextColor(getThemedColor(Theme.key_chat_messageLinkOut));
@@ -5791,8 +5795,11 @@ public class ChatActivityEnterView extends FrameLayout implements
 
                 int beforeLimit;
                 codePointCount = Character.codePointCount(editable, 0, editable.length());
+                boolean isMesh = isMeshDialog(dialog_id);
+                int limitThreshold = isMesh ? 120 : (isLiveComment ? 5 : 100);
+                
                 boolean doneButtonEnabledLocal = true;
-                if (currentLimit > 0 && (beforeLimit = currentLimit - codePointCount) <= (isLiveComment ? 5 : 100)) {
+                if (currentLimit > 0 && (beforeLimit = currentLimit - codePointCount) <= limitThreshold) {
                     if (beforeLimit < -9999) {
                         beforeLimit = -9999;
                     }
