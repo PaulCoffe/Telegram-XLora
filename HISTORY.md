@@ -1,5 +1,27 @@
 ---
 
+## [2026-04-15] Phase 25: CI Build Stabilization & Delivery Synchronization Hardening (mesh-dev)
+
+### Objective
+Restore GitHub Actions build stability and finalize the persistent message delivery lifecycle by resolving critical compilation errors and completing the database-to-UI synchronization flow.
+
+### Changes
+1. **CI Build Fixes**:
+   - **DialogCell.java**: Resolved `cannot find symbol` by replacing the invalid `getThemedColor` call with the correct static `Theme.getColor(..., resourcesProvider)` method.
+   - **MeshManager.java**: Restored the accidentally removed `NotificationCenter` import required for post-ACK UI notifications.
+2. **Delivery Lifecycle Optimization**:
+   - **MessagesStorage.java**: Implemented `updateMessageSendState(int mid, long uid, int state)` to allow the Mesh core to update native Telegram message statuses upon receiving LoRa hardware ACKs.
+   - **SendMessagesHelper.java**: Updated the Mesh transmission trigger to pass the `dialog_id`, ensuring deterministic message tracking throughout the delivery lifecycle.
+   - **MeshStorage.java**: Finalized Database Schema v7, incorporating persistent mapping of LoRa tokens to Telegram message IDs.
+3. **Documentation Integrity**:
+   - Synchronized all project manifests (`MAINTENANCE.md`, `ARCHITECTURE.md`, `ROADMAP.md`) as per the Multi-Agent Protocol v7.3.
+
+### Result
+- **Stability**: Restored CI/CD pipeline integrity.
+- **Reliability**: Fully closed the loop for message delivery status (Pending -> Sent -> Delivered) across app restarts.
+
+---
+
 ## [2026-04-15] Phase 24: Delivery Hardening & Persistent Tracking (mesh-dev)
 
 ### Objective

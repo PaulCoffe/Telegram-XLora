@@ -12906,6 +12906,17 @@ public class MessagesStorage extends BaseController {
         });
     }
 
+    public void updateMessageSendState(int mid, long uid, int state) {
+        storageQueue.postRunnable(() -> {
+            try {
+                database.executeFast(String.format(Locale.US, "UPDATE messages_v2 SET send_state = %d WHERE mid = %d AND uid = %d", state, mid, uid)).stepThis().dispose();
+                database.executeFast(String.format(Locale.US, "UPDATE messages_topics SET send_state = %d WHERE mid = %d AND uid = %d", state, mid, uid)).stepThis().dispose();
+            } catch (Exception e) {
+                checkSQLException(e);
+            }
+        });
+    }
+
     public void markMessageAsSendErrorWithParams(TLRPC.Message msg, long errorAllowedPriceStars, long errorNewPriceStars) {
         final long selfId = getUserConfig().getClientUserId();
         storageQueue.postRunnable(() -> {

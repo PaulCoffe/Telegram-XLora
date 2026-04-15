@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MeshStorage extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "mesh_data.db";
-    private static final int DATABASE_VERSION = 6;
+    private static final int DATABASE_VERSION = 7;
 
     // MeshCore official public channel key (slot 0)
     public static final String PUBLIC_CHANNEL_KEY_HEX = "8b3387e9c5cdea6ac9e5edbaa115cd72";
@@ -133,7 +133,8 @@ public class MeshStorage extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE tg_message_tracker (" +
                 "token INTEGER PRIMARY KEY, " +
                 "account_id INTEGER, " +
-                "message_id INTEGER" +
+                "message_id INTEGER, " +
+                "dialog_id INTEGER DEFAULT 0" +
                 ")");
     }
 
@@ -177,6 +178,9 @@ public class MeshStorage extends SQLiteOpenHelper {
                     "token INTEGER PRIMARY KEY, " +
                     "account_id INTEGER, " +
                     "message_id INTEGER)");
+        }
+        if (oldVersion < 7) {
+            try { db.execSQL("ALTER TABLE tg_message_tracker ADD COLUMN dialog_id INTEGER DEFAULT 0"); } catch (Exception ignored) {}
         }
     }
 
@@ -787,7 +791,7 @@ public class MeshStorage extends SQLiteOpenHelper {
      * Persists a mapping between a Mesh token and a Telegram message ID.
      * Used to recover and update TG message status after app restart.
      */
-    public void saveTgMessageToken(long token, int account, int msgId) {
+    public void saveTgMessageToken(long token, int account, int msgId, long dialogId) {
         storageQueue.postRunnable(() -> {
             try {
                 SQLiteDatabase db = getWritableDatabase();
@@ -795,6 +799,7 @@ public class MeshStorage extends SQLiteOpenHelper {
                 v.put("token",      token);
                 v.put("account_id", account);
                 v.put("message_id", msgId);
+                v.put("dialog_id",  dialogId);
                 db.insertWithOnConflict("tg_message_tracker", null, v, SQLiteDatabase.CONFLICT_REPLACE);
             } catch (Exception e) {
                 FileLog.e(e);
@@ -815,14 +820,15 @@ public class MeshStorage extends SQLiteOpenHelper {
     }
 
     /** Returns all pending TG message tokens for recovery on startup. */
-    public ConcurrentHashMap<Long, Integer[]> getPendingTgMessageTokens() {
-        ConcurrentHashMap<Long, Integer[]> map = new ConcurrentHashMap<>();
+    public ConcurrentHashMap<Long, long[]> getPendingTgMessageTokens() {
+        ConcurrentHashMap<Long, long[]> map = new ConcurrentHashMap<>();
         try (Cursor c = getReadableDatabase().query("tg_message_tracker", null, null, null, null, null, null)) {
             while (c.moveToNext()) {
                 long token = c.getLong(0);
-                int account = c.getInt(1);
-                int msgId = c.getInt(2);
-                map.put(token, new Integer[]{account, msgId});
+                long account = c.getLong(1);
+                long msgId = c.getLong(2);
+                long dialogId = c.getLong(3);
+                map.put(token, new long[]{account, msgId, dialogId});
             }
         } catch (Exception e) {
             FileLog.e(e);

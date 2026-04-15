@@ -3981,7 +3981,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             if (drawMeshIndicator) {
                 if (meshIndicatorPaint == null) {
                     meshIndicatorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                    meshIndicatorPaint.setColor(getThemedColor(Theme.key_chats_nameMessage));
+                    meshIndicatorPaint.setColor(Theme.getColor(Theme.key_chats_nameMessage, resourcesProvider));
                     meshIndicatorPaint.setStrokeCap(Paint.Cap.ROUND);
                 }
                 int indicatorX = nameLeft - dp(18);

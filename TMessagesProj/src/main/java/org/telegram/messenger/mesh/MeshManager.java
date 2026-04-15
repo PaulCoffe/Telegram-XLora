@@ -26,6 +26,7 @@ import androidx.core.content.ContextCompat;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import android.widget.Toast;
 import java.nio.ByteBuffer;
@@ -133,7 +134,7 @@ public class MeshManager {
     private String currentDeviceAddress;
 
     private final CopyOnWriteArrayList<BluetoothDevice>     foundDevices = new CopyOnWriteArrayList<>();
-    private final java.util.concurrent.ConcurrentHashMap<Long, Integer[]> tgMessageTracker = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<Long, long[]> tgMessageTracker = new java.util.concurrent.ConcurrentHashMap<>();
     private final ArrayList<MeshManagerListener> listeners = new ArrayList<>();
     private final Handler handler = new Handler(Looper.getMainLooper());
 
@@ -942,18 +943,19 @@ public class MeshManager {
                         MeshStorage.getInstance().updateMessageStatus(dialogId, ackToken, 2); // 2 = Delivered
                     } else if ((ackToken & 0xFF) == 0x02) {
                         // Contact/Direct Message ACK
-                        Integer[] ids = tgMessageTracker.remove(ackToken);
+                        long[] ids = tgMessageTracker.remove(ackToken);
                         MeshStorage.getInstance().removeTgMessageToken(ackToken);
                         if (ids != null) {
-                            int acc = ids[0];
-                            int mid = ids[1];
-                            FileLog.d(TAG + ": Received Mesh ACK for TG message " + mid + " in account " + acc);
+                            int acc = (int) ids[0];
+                            int mid = (int) ids[1];
+                            long did = ids[2];
+                            FileLog.d(TAG + ": Received Mesh ACK for TG message " + mid + " in account " + acc + " for dialog " + did);
                             // Update TG message status to "Sent" (0)
                             final int account = acc;
                             final int messageId = mid;
+                            final long dialogId = did;
                             AndroidUtilities.runOnUIThread(() -> {
-                                MessagesStorage.getInstance(account).updateReplyMessageState(messageId, 0, 0, 0); // Reuse some status update method or direct DB edit
-                                // Actually, better to use markMessageAsSent logic if possible
+                                MessagesStorage.getInstance(account).updateMessageSendState(messageId, dialogId, 0);
                                 NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.messageReceivedByServer, messageId);
                             });
                         }
@@ -1319,10 +1321,10 @@ public class MeshManager {
      * @param text       message text
      */
     public void sendContactMessage(String pubKeyHex, String text) {
-        sendContactMessage(pubKeyHex, text, 0, 0);
+        sendContactMessage(pubKeyHex, text, 0, 0, MeshStorage.contactDialogId(pubKeyHex));
     }
 
-    public void sendContactMessage(String pubKeyHex, String text, int currentAccount, int tgMsgId) {
+    public void sendContactMessage(String pubKeyHex, String text, int currentAccount, int tgMsgId, long dialogId) {
         if (pubKeyHex == null || pubKeyHex.length() < 12) {
             FileLog.e(TAG + ": Invalid pubkey for DM: " + pubKeyHex);
             return;
@@ -1373,8 +1375,8 @@ public class MeshManager {
                 | ((long)(packet[3] & 0xFF) << 24);
 
         if (tgMsgId != 0) {
-            tgMessageTracker.put(meshToken, new Integer[]{currentAccount, tgMsgId});
-            MeshStorage.getInstance().saveTgMessageToken(meshToken, currentAccount, tgMsgId);
+            tgMessageTracker.put(meshToken, new long[]{currentAccount, tgMsgId, dialogId});
+            MeshStorage.getInstance().saveTgMessageToken(meshToken, currentAccount, tgMsgId, dialogId);
         }
 
         final String finalPub = pubKeyHex;

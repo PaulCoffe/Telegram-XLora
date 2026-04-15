@@ -285,12 +285,14 @@ To maximize character capacity for Cyrillic text over LoRa (which has a strict ~
 | 2026-04-15 | **v18** | **Security Hardening**: Disabled cleartext traffic, restricted providers/FileProvider paths, and removed sensitive token/key logging. |
 | 2026-04-15 | **v19** | **Connectivity (Phase 18)**: Implemented Persistent Auto-Reconnect (background pulse) and Automated PIN Entry using `MeshStorage`. |
 | 2026-04-15 | **v20** | **Navigation Re-engineering**: Integrated Mesh as a dedicated bottom navigation tab (5-tab layout), removed redundant folder filters, and added premium Lottie icons. |
+| 2026-04-15 | **v21** | **Build Stabilization & Delivery Hardening**: Restored CI/CD integrity, implemented DB v7 with `tg_message_tracker` persistence, and finalized Telegram-to-Mesh delivery status synchronization. |
 
 - [x] **Phase 1: MeshCore Framework Stabilization** (Logcat Analysis, Dedup Logic)
 - [x] **Phase 2: Premium UI Restoration** (Emoji Avatars, Advanced Gradients)
 - [x] **Phase 3: Universal Telemetry** (SNR/Hops Integration in all cells)
 - [x] **Phase 4: Mesh Navigation Integration** (Dedicated Bottom Tab)
-- [ ] **Phase 5: Multi-Node Mesh Routing** (Advanced HOP optimization)
+- [x] **Phase 5: Persistent Delivery Reliability** (Stage 3 ACK matching, DB v7)
+- [ ] **Phase 6: Multi-Node Mesh Routing** (Advanced HOP optimization)
 
 ---
 

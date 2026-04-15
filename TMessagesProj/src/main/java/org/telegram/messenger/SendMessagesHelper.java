@@ -4937,7 +4937,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     if (newMsg.isMesh) {
                         String meshPubkey = org.telegram.messenger.mesh.MeshStorage.getInstance().getPubkeyForUser(peer);
                         if (meshPubkey != null && newMsg.message != null) {
-                            org.telegram.messenger.mesh.MeshManager.getInstance().sendContactMessage(meshPubkey, newMsg.message, currentAccount, newMsg.id);
+                            org.telegram.messenger.mesh.MeshManager.getInstance().sendContactMessage(meshPubkey, newMsg.message, currentAccount, newMsg.id, newMsg.dialog_id);
                             if (retryMessageObject == null) {
                                 getMediaDataController().cleanDraft(peer, replyToTopMsg != null ? replyToTopMsg.getId() : 0, false);
                             }

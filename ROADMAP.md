@@ -271,6 +271,13 @@
 - [x] Unified and polished telemetry footer in message bubbles (`ChatMessageCell`).
 - [x] Verified zero "stuck status" messages via persistent token recovery logic.
 
+## Phase 25 — Build Stabilization & Delivery Synchronization ✅ (Complete)
+
+- [x] Fixed `DialogCell.java` compilation error (Theme API usage).
+- [x] Restored `NotificationCenter` import in `MeshManager.java`.
+- [x] Synchronized `MessagesStorage.java` and `SendMessagesHelper.java` persistent state logic.
+- [x] Result: Restored CI/CD pipeline integrity on `mesh-dev`.
+
 ## Current Status (2026-04-15)
 
 | Component | Status |
@@ -279,6 +286,6 @@
 | Connectivity | ✅ Persistent Auto-Reconnect |
 | Pairing UX | ✅ Automated PIN Entry |
 | Mesh Navigation | ✅ Dedicated Bottom Tab (5 tabs) |
-| Delivery Reliability| ✅ Persistent ACK Matching (DB v6) |
-| CI Build (`mesh-dev`) | ✅ Stable |
+| Delivery Reliability| ✅ Persistent ACK Matching (DB v7) |
+| CI Build (`mesh-dev`) | ✅ Recovering / Stabilized |
 
