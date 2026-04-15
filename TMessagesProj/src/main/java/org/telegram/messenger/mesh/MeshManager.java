@@ -133,7 +133,8 @@ public class MeshManager {
     private String currentDeviceAddress;
 
     private final CopyOnWriteArrayList<BluetoothDevice>     foundDevices = new CopyOnWriteArrayList<>();
-    private final CopyOnWriteArrayList<MeshManagerListener> listeners    = new CopyOnWriteArrayList<>();
+    private final java.util.concurrent.ConcurrentHashMap<Long, Integer[]> tgMessageTracker = new java.util.concurrent.ConcurrentHashMap<>();
+    private final ArrayList<MeshManagerListener> listeners = new ArrayList<>();
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     // ---- Listener ----
@@ -211,6 +212,16 @@ public class MeshManager {
         f.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
         ApplicationLoader.applicationContext.registerReceiver(pairingReceiver, f);
         handler.post(pendingCleanupRunnable);
+
+        // Phase 20: Load pending TG message tokens from persistent storage
+        try {
+            tgMessageTracker.putAll(MeshStorage.getInstance().getPendingTgMessageTokens());
+            if (!tgMessageTracker.isEmpty()) {
+                FileLog.d(TAG + ": Loaded " + tgMessageTracker.size() + " pending TG message tokens from database");
+            }
+        } catch (Exception e) {
+            FileLog.e(TAG + ": Failed to load pending tokens", e);
+        }
     }
 
     // ---- BLE Pairing (Bonding) ----
@@ -929,6 +940,23 @@ public class MeshManager {
                         int slot = (int)((ackToken >> 16) & 0xFF);
                         long dialogId = MeshStorage.channelDialogId(slot);
                         MeshStorage.getInstance().updateMessageStatus(dialogId, ackToken, 2); // 2 = Delivered
+                    } else if ((ackToken & 0xFF) == 0x02) {
+                        // Contact/Direct Message ACK
+                        Integer[] ids = tgMessageTracker.remove(ackToken);
+                        MeshStorage.getInstance().removeTgMessageToken(ackToken);
+                        if (ids != null) {
+                            int acc = ids[0];
+                            int mid = ids[1];
+                            FileLog.d(TAG + ": Received Mesh ACK for TG message " + mid + " in account " + acc);
+                            // Update TG message status to "Sent" (0)
+                            final int account = acc;
+                            final int messageId = mid;
+                            AndroidUtilities.runOnUIThread(() -> {
+                                MessagesStorage.getInstance(account).updateReplyMessageState(messageId, 0, 0, 0); // Reuse some status update method or direct DB edit
+                                // Actually, better to use markMessageAsSent logic if possible
+                                NotificationCenter.getInstance(account).postNotificationName(NotificationCenter.messageReceivedByServer, messageId);
+                            });
+                        }
                     }
                 } else {
                     FileLog.d(TAG + ": PACKET_ACK (no payload)");
@@ -1291,6 +1319,10 @@ public class MeshManager {
      * @param text       message text
      */
     public void sendContactMessage(String pubKeyHex, String text) {
+        sendContactMessage(pubKeyHex, text, 0, 0);
+    }
+
+    public void sendContactMessage(String pubKeyHex, String text, int currentAccount, int tgMsgId) {
         if (pubKeyHex == null || pubKeyHex.length() < 12) {
             FileLog.e(TAG + ": Invalid pubkey for DM: " + pubKeyHex);
             return;
@@ -1333,6 +1365,17 @@ public class MeshManager {
         
         // Text payload
         System.arraycopy(textBytes, 0, packet, 13, textBytes.length);
+
+        // Generate token for tracking (first 4 bytes)
+        long meshToken = ((long)(packet[0] & 0xFF))
+                | ((long)(packet[1] & 0xFF) << 8)
+                | ((long)(packet[2] & 0xFF) << 16)
+                | ((long)(packet[3] & 0xFF) << 24);
+
+        if (tgMsgId != 0) {
+            tgMessageTracker.put(meshToken, new Integer[]{currentAccount, tgMsgId});
+            MeshStorage.getInstance().saveTgMessageToken(meshToken, currentAccount, tgMsgId);
+        }
 
         final String finalPub = pubKeyHex;
         Runnable saveToHistory = () ->

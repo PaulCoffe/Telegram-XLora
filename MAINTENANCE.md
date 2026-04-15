@@ -77,5 +77,26 @@ The project uses GitHub Actions for verification. After any merge:
 - **FileProvider**: keep `provider_paths.xml` narrow (no `root-path` to `/storage`).
 - **Logging**: never log tokens/keys/secrets (push auth key, login tokens, mesh secrets/pins).
 
-## 5. Deployment
+## 6. Manual Verification Protocol
+
+To ensure high-stakes delivery logic works correctly, perform the following tests:
+
+### 6.1 Persistent Delivery Recovery
+1. Start the app and connect to a LoRa device.
+2. Send a message to a Mesh contact.
+3. While the status is "Pending" (Clock icon), **Force Stop** the app.
+4. Restart the app.
+5. **Verification**: 
+   - The message should immediately show "Pending" in the chat list.
+   - Once the BLE connection re-establishes, the message should transition to "Sent" (Single Check) or "Delivered" (Double Check) automatically without user intervention.
+   - Check `MeshStorage` logs via `adb logcat | grep MeshStorage` to confirm `tg_message_tracker` was loaded on startup.
+
+### 6.2 Telemetry Refresh
+1. Receive a message via LoRa.
+2. Observe the SNR/Hops in the chat list and the message bubble.
+3. **Verification**: SNR should match the hardware report (usually -20 to +15 dB). Hops should reflect the path correctly (0 = Direct).
+
+---
+
+## 7. Deployment
 Always use `./gradlew assembleRelease` to confirm that the native JNI libraries (FFmpeg, MeshCore) are correctly bundled for all architectures (`arm64-v8a` is the primary target).

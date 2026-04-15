@@ -27,7 +27,8 @@ public class MessageCustomParamsHelper {
             message.translatedPoll == null &&
             message.translatedText == null &&
             message.errorAllowedPriceStars == 0 &&
-            message.errorNewPriceStars == 0
+            message.errorNewPriceStars == 0 &&
+            !message.isMesh
         );
     }
 
@@ -50,6 +51,9 @@ public class MessageCustomParamsHelper {
         toMessage.summaryText = fromMessage.summaryText;
         toMessage.translatedSummaryText = fromMessage.translatedSummaryText;
         toMessage.translatedSummaryLanguage = fromMessage.translatedSummaryLanguage;
+        toMessage.isMesh = fromMessage.isMesh;
+        toMessage.meshSnr = fromMessage.meshSnr;
+        toMessage.meshHops = fromMessage.meshHops;
     }
 
 
@@ -109,6 +113,7 @@ public class MessageCustomParamsHelper {
             flags = setFlag(flags, FLAG_10, message.summaryText != null);
             flags = setFlag(flags, FLAG_11, message.translatedSummaryText != null);
             flags = setFlag(flags, FLAG_12, message.translatedSummaryLanguage != null);
+            flags = setFlag(flags, FLAG_13, message.isMesh);
         }
 
         @Override
@@ -158,6 +163,10 @@ public class MessageCustomParamsHelper {
             if (hasFlag(flags, FLAG_12)) {
                 stream.writeString(message.translatedSummaryLanguage);
             }
+            if (hasFlag(flags, FLAG_13)) {
+                stream.writeInt32(message.meshSnr);
+                stream.writeInt32(message.meshHops);
+            }
         }
 
         @Override
@@ -204,6 +213,11 @@ public class MessageCustomParamsHelper {
             }
             if (hasFlag(flags, FLAG_12)) {
                 message.translatedSummaryLanguage = stream.readString(exception);
+            }
+            if (hasFlag(flags, FLAG_13)) {
+                message.isMesh = true;
+                message.meshSnr = stream.readInt32(exception);
+                message.meshHops = stream.readInt32(exception);
             }
         }
 

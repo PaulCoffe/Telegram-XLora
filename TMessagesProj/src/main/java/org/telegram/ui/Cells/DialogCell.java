@@ -2541,6 +2541,15 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             if (messageString == null) {
                 messageString = "";
             }
+            if (message != null && message.isMesh) {
+                String hopsStr = message.hops > 0 ? String.format("H%d", message.hops) : "Direct";
+                String telemetry = String.format(" [%.1f dB • %s]", message.snr, hopsStr);
+                if (messageString instanceof SpannableStringBuilder) {
+                    ((SpannableStringBuilder) messageString).append(telemetry);
+                } else {
+                    messageString = TextUtils.concat(messageString, telemetry);
+                }
+            }
             CharSequence mess = messageString;
             if (mess.length() > 150) {
                 mess = mess.subSequence(0, 150);
@@ -3972,7 +3981,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             if (drawMeshIndicator) {
                 if (meshIndicatorPaint == null) {
                     meshIndicatorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                    meshIndicatorPaint.setColor(0xFF39FF14); // Neon Green
+                    meshIndicatorPaint.setColor(getThemedColor(Theme.key_chats_nameMessage));
                     meshIndicatorPaint.setStrokeCap(Paint.Cap.ROUND);
                 }
                 int indicatorX = nameLeft - dp(18);

@@ -1,6 +1,6 @@
 # Telegram-XLora Architecture & MeshCore Integration
 
-> Last updated: 2026-04-14 — Protocol alignment v1.12.0+ | Final Rebranding v17 (Telemetry Integration v16)
+> Last updated: 2026-04-15 — Protocol alignment v1.13.0+ | Final Delivery Hardening (v21)
 
 ## 1. Overview
 Telegram-XLora is a custom Android client based on Forkgram that integrates **MeshCore LoRa** networking via Bluetooth LE. Users can communicate without internet using BLE-connected LoRa hardware (Heltec T114, LilyGO, etc.).
@@ -75,9 +75,9 @@ default void onSelfInfoLoaded(String pubKeyHex, String name, long freqHz, float 
 ---
 
 ### `MeshStorage` (`org.telegram.messenger.mesh`)
-**Role**: SQLite persistence. DB name: `mesh_data.db`, current version: **3**.
+**Role**: SQLite persistence. DB name: `mesh_data.db`, current version: **6**.
 
-**Schema v3**:
+**Schema v6**:
 ```sql
 -- Per-node metadata (one row per discovered LoRa node)
 CREATE TABLE nodes (
@@ -117,11 +117,22 @@ CREATE TABLE device_pins (
     address TEXT PRIMARY KEY,
     pin INTEGER
 );
+
+-- Persistent Telegram message delivery tracker (v6)
+-- Maps LoRa tokens (ack_token) to Telegram message IDs
+CREATE TABLE tg_message_tracker (
+    ack_token INTEGER PRIMARY KEY, -- 4-byte deterministic token
+    dialog_id INTEGER,             -- target chat ID
+    message_id INTEGER             -- internal TG message ID
+);
 ```
 
-**Telemetry Retrieval Methods (v5)**:
+**Telemetry Retrieval Methods (v6)**:
 - `getLastMessageSnr(long dialogId)`: Queries the `messages` table for the most recent message's SNR value.
 - `getLastMessageHops(long dialogId)`: Queries the `messages` table for the most recent message's hop count.
+- `saveTgMessageToken(int token, long dialogId, int messageId)`: Persists delivery trackers.
+- `removeTgMessageToken(int token)`: Cleans up trackers on ACK/failure.
+- `getPendingTgMessageTokens()`: Recovers tracker state across restarts.
 
 **Channel constants**:
 - **Public channel key** (slot 0): `8b3387e9c5cdea6ac9e5edbaa115cd72` (official MeshCore)

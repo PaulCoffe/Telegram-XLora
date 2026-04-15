@@ -62543,6 +62543,14 @@ public class TLRPC {
         public TL_textWithEntities summaryText; //custom
         public String translatedSummaryLanguage; //custom
         public TL_textWithEntities translatedSummaryText; //custom
+        public boolean post_author_author;
+        public boolean post_author_date;
+        public boolean post_author_name;
+
+        public boolean isMesh;
+        public int meshSnr;
+        public int meshHops;
+        public int meshStatus;
 
         public static Message TLdeserialize(InputSerializedData stream, int constructor, boolean exception) {
             Message result = null;

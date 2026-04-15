@@ -4732,6 +4732,12 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     if (sendToUser.bot) {
                         newMsg.unread = false;
                     }
+                    if (type == 0 && scheduleDate == 0) {
+                        String meshPubkey = org.telegram.messenger.mesh.MeshStorage.getInstance().getPubkeyForUser(peer);
+                        if (meshPubkey != null) {
+                            newMsg.isMesh = true;
+                        }
+                    }
                 }
             } else {
                 newMsg.peer_id = new TLRPC.TL_peerUser();
@@ -4927,10 +4933,24 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 MessagesStorage.getInstance(currentAccount).putMessages(arr, false, true, false, 0, mode, threadMessageId);
                 MessagesController.getInstance(currentAccount).updateInterfaceWithMessages(peer, objArr, mode);
 
-                if (!ApplicationLoader.isNetworkOnline() && org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled()) {
-                    if (newMsg.message != null && !newMsg.message.isEmpty()) {
-                        // Route outgoing TG message to primary LoRa channel (slot 0) when offline
-                        org.telegram.messenger.mesh.MeshManager.getInstance().sendChannelMessage(0, newMsg.message);
+                if (org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled()) {
+                    if (newMsg.isMesh) {
+                        String meshPubkey = org.telegram.messenger.mesh.MeshStorage.getInstance().getPubkeyForUser(peer);
+                        if (meshPubkey != null && newMsg.message != null) {
+                            org.telegram.messenger.mesh.MeshManager.getInstance().sendContactMessage(meshPubkey, newMsg.message, currentAccount, newMsg.id);
+                            if (retryMessageObject == null) {
+                                getMediaDataController().cleanDraft(peer, replyToTopMsg != null ? replyToTopMsg.getId() : 0, false);
+                            }
+                            if (scheduleDate == 0) {
+                                NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.dialogsNeedReload);
+                            }
+                            return; // Bypass TG server sending
+                        }
+                    } else if (!ApplicationLoader.isNetworkOnline()) {
+                        if (newMsg.message != null && !newMsg.message.isEmpty()) {
+                            // Route outgoing TG message to primary LoRa channel (slot 0) when offline
+                            org.telegram.messenger.mesh.MeshManager.getInstance().sendChannelMessage(0, newMsg.message);
+                        }
                     }
                 }
 

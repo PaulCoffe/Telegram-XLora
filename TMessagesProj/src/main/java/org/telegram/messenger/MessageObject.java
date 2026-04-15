@@ -247,14 +247,13 @@ public class MessageObject {
     public boolean isRestrictedMessage;
     public long loadedFileSize;
     public boolean forceExpired;
+    public boolean isMesh;
+    public float snr;
+    public int hops;
     public long actionDeleteGroupEventId = -1;
     public HashSet<Integer> expandedQuotes;
     public boolean expandedExplanation;
     public boolean forceShowPollResults;
-
-    public boolean isMesh;
-    public int hops;
-    public int snr;
     public int meshStatus;
 
     public boolean isSpoilersRevealed;
@@ -1881,19 +1880,10 @@ public class MessageObject {
         messageOwner = message;
 
         if (messageOwner != null && messageOwner.custom_params != null) {
-            try {
-                messageOwner.custom_params.rewind();
-                if (messageOwner.custom_params.limit() >= 8) {
-                    int magic = messageOwner.custom_params.readInt32(false);
-                    if (magic == 0x4D455348) { // "MESH" magic
-                        isMesh = true;
-                        hops = messageOwner.custom_params.readInt32(false);
-                        if (messageOwner.custom_params.limit() >= 12) {
-                            snr = messageOwner.custom_params.readInt32(false);
-                        }
-                    }
-                }
-            } catch (Exception ignore) {}
+            MessageCustomParamsHelper.readLocalParams(messageOwner, messageOwner.custom_params);
+            isMesh = messageOwner.isMesh;
+            snr = messageOwner.meshSnr;
+            hops = messageOwner.meshHops;
         }
 
         replyMessageObject = replyToMessage;

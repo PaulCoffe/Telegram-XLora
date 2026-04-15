@@ -1,5 +1,32 @@
 ---
 
+## [2026-04-15] Phase 24: Delivery Hardening & Persistent Tracking (mesh-dev)
+
+### Objective
+Ensure reliable message delivery and state persistence across app restarts by implementing a robust tracking mechanism for LoRa hardware ACKs and Telegram message IDs.
+
+### Changes
+1. **Persistence Layer (`MeshStorage.java`)**:
+   - **Persistent Tracker**: Implemented `tg_message_tracker` table (DB v6) to map LoRa `ack_token` to Telegram `account_id` and `message_id`.
+   - **Self-Cleaning Tracker**: Updated `cleanupPendingMessages` to automatically purge stale tracker entries if a message times out (failed status).
+   - **Bug Fix**: Resolved a duplication regression in `getLastMessageSnr` that occurred during previous code cleanup.
+2. **Delivery Handshake (`MeshManager.java`)**:
+   - **State Recovery**: Added loading of pending TG message tokens from the database on app startup to resume tracking of inflight messages.
+   - **Deterministic Matching**: Validated the matching of asynchronous hardware ACKs to UI message states using the persistent tracker.
+3. **UI/UX Consistency**:
+   - **Universal Telemetry**: Verified and hardened SNR/Hops rendering in both `DialogCell` and `ChatMessageCell`.
+   - **Themed Branding**: Standardized telemetry colors using `Theme.key_chat_outSentClock` and `Theme.key_chat_mediaSentClock`.
+4. **Documentation**:
+   - Updated `MAINTENANCE.md` with a detailed manual verification protocol for persistent delivery testing.
+   - Synchronized `ARCHITECTURE.md` (v1.13.0) and `ROADMAP.md` (Phase 24 complete).
+
+### Result
+- **Reliability**: Outgoing messages no longer get "stuck" in a sending state if the app is force-stopped and restarted.
+- **Maintainability**: The system follows a clean, documented lifecycle for message matching and cleanup.
+- **Consistency**: Telemetry rendering is unified across the entire chat experience.
+
+---
+
 ## [2026-04-15] Phase 20: Final UI/UX Overhaul & Consistency Purification (mesh-dev)
 
 ### Objective

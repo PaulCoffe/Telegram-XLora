@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MeshStorage extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "mesh_data.db";
-    private static final int DATABASE_VERSION = 5;
+    private static final int DATABASE_VERSION = 6;
 
     // MeshCore official public channel key (slot 0)
     public static final String PUBLIC_CHANNEL_KEY_HEX = "8b3387e9c5cdea6ac9e5edbaa115cd72";
@@ -49,6 +49,9 @@ public class MeshStorage extends SQLiteOpenHelper {
 
     // In-memory node→tgUser cache — avoids SQLite reads on GATT callbacks
     private final ConcurrentHashMap<String, Long> nodeUserCache = new ConcurrentHashMap<>();
+
+    // In-memory tgUser→node cache — for direct Mesh routing interception
+    private final ConcurrentHashMap<Long, String> userNodeCache = new ConcurrentHashMap<>();
 
     // In-memory channel slot cache — slot_index → LoraChannel
     private final ConcurrentHashMap<Integer, LoraChannel> channelCache = new ConcurrentHashMap<>();
@@ -126,6 +129,12 @@ public class MeshStorage extends SQLiteOpenHelper {
         pub.put("secret_hex", PUBLIC_CHANNEL_KEY_HEX);
         pub.put("is_public", 1);
         db.insert("lora_channels", null, pub);
+        
+        db.execSQL("CREATE TABLE tg_message_tracker (" +
+                "token INTEGER PRIMARY KEY, " +
+                "account_id INTEGER, " +
+                "message_id INTEGER" +
+                ")");
     }
 
     @Override
@@ -163,6 +172,12 @@ public class MeshStorage extends SQLiteOpenHelper {
             try { db.execSQL("ALTER TABLE messages ADD COLUMN snr REAL DEFAULT 0"); } catch (Exception ignored) {}
             try { db.execSQL("ALTER TABLE messages ADD COLUMN hops INTEGER DEFAULT 0"); } catch (Exception ignored) {}
         }
+        if (oldVersion < 6) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS tg_message_tracker (" +
+                    "token INTEGER PRIMARY KEY, " +
+                    "account_id INTEGER, " +
+                    "message_id INTEGER)");
+        }
     }
 
     // ============================================================================================
@@ -184,7 +199,10 @@ public class MeshStorage extends SQLiteOpenHelper {
                     while (c.moveToNext()) {
                         String pk = c.getString(0);
                         long id = c.getLong(1);
-                        if (id != 0) nodeUserCache.put(pk, id);
+                        if (id != 0) {
+                            nodeUserCache.put(pk, id);
+                            userNodeCache.put(id, pk);
+                        }
                     }
                 }
 
@@ -214,6 +232,12 @@ public class MeshStorage extends SQLiteOpenHelper {
         return cached != null ? cached : 0L;
     }
 
+    /** Returns the linked Mesh pubkey for a regular Telegram user ID (cache-only). */
+    public String getPubkeyForUser(long tgUserId) {
+        if (tgUserId == 0) return null;
+        return userNodeCache.get(tgUserId);
+    }
+
     public void updateNode(String pubkey, String nickname, int rssi, int hops) {
         storageQueue.postRunnable(() -> {
             try {
@@ -237,8 +261,12 @@ public class MeshStorage extends SQLiteOpenHelper {
     public void linkNodeToUser(String pubkey, long tgUserId) {
         if (tgUserId != 0) {
             nodeUserCache.put(pubkey, tgUserId);
+            userNodeCache.put(tgUserId, pubkey);
         } else {
-            nodeUserCache.remove(pubkey);
+            Long oldUser = nodeUserCache.remove(pubkey);
+            if (oldUser != null) {
+                userNodeCache.remove(oldUser);
+            }
         }
         storageQueue.postRunnable(() -> {
             try {
@@ -512,6 +540,12 @@ public class MeshStorage extends SQLiteOpenHelper {
                 int count = db.update("messages", v, "status = 0 AND date < ?", new String[]{String.valueOf(threshold)});
                 if (count > 0) {
                     FileLog.d("MeshStorage: marked " + count + " pending messages as failed (timeout)");
+                    
+                    // Also remove from tg_message_tracker if they timed out
+                    db.delete("tg_message_tracker", 
+                            "message_id IN (SELECT id FROM messages WHERE status = 3 AND date < ?)", 
+                            new String[]{String.valueOf(threshold)});
+
                     AndroidUtilities.runOnUIThread(() ->
                             NotificationCenter.getGlobalInstance()
                                     .postNotificationName(NotificationCenter.didUpdateMessages, 0L));
@@ -747,5 +781,52 @@ public class MeshStorage extends SQLiteOpenHelper {
             FileLog.e(e);
         }
         return 0;
+    }
+
+    /**
+     * Persists a mapping between a Mesh token and a Telegram message ID.
+     * Used to recover and update TG message status after app restart.
+     */
+    public void saveTgMessageToken(long token, int account, int msgId) {
+        storageQueue.postRunnable(() -> {
+            try {
+                SQLiteDatabase db = getWritableDatabase();
+                ContentValues v = new ContentValues();
+                v.put("token",      token);
+                v.put("account_id", account);
+                v.put("message_id", msgId);
+                db.insertWithOnConflict("tg_message_tracker", null, v, SQLiteDatabase.CONFLICT_REPLACE);
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        });
+    }
+
+    /** Removes a token from the persistent tracker once the message is delivered or failed. */
+    public void removeTgMessageToken(long token) {
+        storageQueue.postRunnable(() -> {
+            try {
+                SQLiteDatabase db = getWritableDatabase();
+                db.delete("tg_message_tracker", "token = ?", new String[]{String.valueOf(token)});
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        });
+    }
+
+    /** Returns all pending TG message tokens for recovery on startup. */
+    public ConcurrentHashMap<Long, Integer[]> getPendingTgMessageTokens() {
+        ConcurrentHashMap<Long, Integer[]> map = new ConcurrentHashMap<>();
+        try (Cursor c = getReadableDatabase().query("tg_message_tracker", null, null, null, null, null, null)) {
+            while (c.moveToNext()) {
+                long token = c.getLong(0);
+                int account = c.getInt(1);
+                int msgId = c.getInt(2);
+                map.put(token, new Integer[]{account, msgId});
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+        return map;
     }
 }

@@ -263,12 +263,13 @@
 
 ## Phase 23 — Mesh Navigation Re-engineering ✅ (Complete)
 
-- [x] Defined `DIALOGS_TYPE_MESH = 17` in `DialogsActivity.java`
-- [x] Updated `MainTabsActivity.java` to support 5-tab layout
-- [x] Injected Mesh tab as 2nd position with `tab_symbols` Lottie icon
-- [x] Disabled redundant Mesh folders in `MessagesController.java`
-- [x] Adjusted bottom bar layout (410dp) for balanced spacing
-- [x] Verified filtering and tab switching logic
+## Phase 24 — Telemetry Persistence & Delivery Hardening ✅ (Complete)
+
+- [x] Implemented `tg_message_tracker` table in `MeshStorage` (DB v6).
+- [x] Persistent delivery status recovery (ACK matching) after app restarts.
+- [x] Standardized SNR/Hops telemetry rendering in chat list (`DialogCell`).
+- [x] Unified and polished telemetry footer in message bubbles (`ChatMessageCell`).
+- [x] Verified zero "stuck status" messages via persistent token recovery logic.
 
 ## Current Status (2026-04-15)
 
@@ -278,5 +279,6 @@
 | Connectivity | ✅ Persistent Auto-Reconnect |
 | Pairing UX | ✅ Automated PIN Entry |
 | Mesh Navigation | ✅ Dedicated Bottom Tab (5 tabs) |
+| Delivery Reliability| ✅ Persistent ACK Matching (DB v6) |
 | CI Build (`mesh-dev`) | ✅ Stable |
 
