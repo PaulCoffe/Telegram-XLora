@@ -3474,14 +3474,6 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             hasMeshTelemetry = true;
             meshSnrTelemetry = MeshStorage.getInstance().getLastMessageSnr(currentDialogId);
             meshHopsTelemetry = MeshStorage.getInstance().getLastMessageHops(currentDialogId);
-            if (messageString != null && messageString.length() > 0) {
-                String telemetry = String.format(" [SNR: %.1f | Hops: %d]", meshSnrTelemetry, (int)meshHopsTelemetry);
-                if (messageString instanceof SpannableStringBuilder) {
-                    ((SpannableStringBuilder) messageString).append(telemetry);
-                } else if (messageString instanceof String) {
-                    messageString = messageString + telemetry;
-                }
-            }
         } else {
             hasMeshTelemetry = false;
         }

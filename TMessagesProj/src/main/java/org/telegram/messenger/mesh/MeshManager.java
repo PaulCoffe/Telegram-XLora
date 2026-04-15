@@ -1041,6 +1041,7 @@ public class MeshManager {
         // Bytes 8+: Node name (UTF-8)
         if (data.length < 7) return;
         String pubKeyHex = bytesToHex(Arrays.copyOfRange(data, 1, 7));
+        String name = "";
         if (data.length > 8) {
             name = extractString(data, 8, data.length - 8);
         }
