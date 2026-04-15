@@ -54,5 +54,7 @@ The project uses GitHub Actions for verification. After any merge:
 
 **Workflow note**: GitHub Actions is pinned to **NDK r21e** (`ndkVersion 21.4.7075529`). Avoid adding extra NDK installs unless explicitly required, as they increase disk usage and flakiness on hosted runners.
 
+**tde2e note**: `TMessagesProj/jni/tde2e/build-tdlib.sh` defaults to `ANDROID_NDK_VERSION=23.2.8568313`. Our native pipeline must explicitly pass the configured `android.ndkDirectory` version to avoid accidental dependence on a runner-preinstalled NDK.
+
 ## 5. Deployment
 Always use `./gradlew assembleRelease` to confirm that the native JNI libraries (FFmpeg, MeshCore) are correctly bundled for all architectures (`arm64-v8a` is the primary target).

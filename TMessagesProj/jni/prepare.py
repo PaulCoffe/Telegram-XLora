@@ -484,9 +484,9 @@ stage('tde2e', """
     cd "$source_dir/example/android"
     if [ -n "$SED_CMDS" ]; then
         sed "$SED_CMDS" ./build-tdlib.sh
-        sed "$SED_CMDS" ./build-tdlib.sh | bash -s -- "{ndk}/../.."
+        sed "$SED_CMDS" ./build-tdlib.sh | bash -s -- "{ndk}/../.." "{ndkVersion}"
     else
-        ./build-tdlib.sh "{ndk}/../.."
+        ./build-tdlib.sh "{ndk}/../.." "{ndkVersion}"
     fi
 
     for arch in {archesStr}; do
@@ -498,6 +498,7 @@ stage('tde2e', """
     echo "Built archs: {archesStr}"
 """.format(
     ndk=ndkPath,
+    ndkVersion=os.path.basename(os.path.normpath(ndkPath)),
     archesStr=' '.join(
         'arm64-v8a' if arch == 'arm64' else
         'armeabi-v7a' if arch == 'arm' else
