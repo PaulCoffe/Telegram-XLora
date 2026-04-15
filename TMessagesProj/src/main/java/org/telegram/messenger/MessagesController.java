@@ -274,19 +274,20 @@ public class MessagesController extends BaseController implements NotificationCe
     public ArrayList<DialogFilter> dialogFilters = new ArrayList<>();
 
     public void checkMeshFilter() {
-        boolean enabled = org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled();
-        
-        // Ensure legacy folder is removed
+        // Remove ALL Mesh folders from the main list as they are now in a dedicated tab
+        boolean changed = false;
         for (int a = 0; a < dialogFilters.size(); a++) {
-            if (dialogFilters.get(a).id == MESH_FILTER_ID) {
+            int id = dialogFilters.get(a).id;
+            if (id == MESH_FILTER_ID || id == MESH_CHANNELS_FILTER_ID || id == MESH_CONTACTS_FILTER_ID) {
                 DialogFilter filter = dialogFilters.remove(a);
                 dialogFiltersById.remove(filter.id);
                 a--;
+                changed = true;
             }
         }
-
-        checkSpecificMeshFilter(enabled, MESH_CHANNELS_FILTER_ID, "Mesh Channels");
-        checkSpecificMeshFilter(enabled, MESH_CONTACTS_FILTER_ID, "Mesh Contacts");
+        if (changed) {
+            NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.dialogFiltersUpdated);
+        }
     }
 
     private void checkSpecificMeshFilter(boolean enabled, int filterId, String name) {

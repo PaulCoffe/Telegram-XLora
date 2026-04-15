@@ -340,6 +340,7 @@
     <string name="NotificationsPermissionSettings">Open Settings</string>
     <string name="YourContacts">Your contacts on Telegram</string>
     <string name="ConnectingYourContacts">Connecting your contacts...</string>
+    <string name="Mesh">Mesh</string>
     <string name="ArchiveHintHeader1">This is your Archive</string>
     <string name="ArchiveHintText1">Chats with enabled notifications get unarchived when new messages arrive.</string>
     <string name="ArchiveHintHeader2">Muted chats</string>

@@ -258,12 +258,17 @@
 
 ---
 
-## Phase 21 — Persistent Reconnection & Automated Pairing ✅ (Complete)
 
-- [x] **Automated PIN Entry**: Implemented automatic passkey injection in `MeshManager.pairingReceiver` using `MeshStorage` pins.
-- [x] **Background Reconnect**: Modified `scheduleReconnect` to transition into a persistent "background pulse" mode (30-40s delay) after initial failures.
-- [x] **Manual Disconnect Guard**: Introduced `isManualDisconnect` state to prevent unwanted auto-reconnection after user-initiated logouts.
-- [x] **Foreground Heartbeat**: Added a 60-second periodic pulse in `MeshForegroundService` to keep the reconnection logic active in the background.
+---
+
+## Phase 23 — Mesh Navigation Re-engineering ✅ (Complete)
+
+- [x] Defined `DIALOGS_TYPE_MESH = 17` in `DialogsActivity.java`
+- [x] Updated `MainTabsActivity.java` to support 5-tab layout
+- [x] Injected Mesh tab as 2nd position with `tab_symbols` Lottie icon
+- [x] Disabled redundant Mesh folders in `MessagesController.java`
+- [x] Adjusted bottom bar layout (410dp) for balanced spacing
+- [x] Verified filtering and tab switching logic
 
 ## Current Status (2026-04-15)
 
@@ -272,5 +277,6 @@
 | UI/UX Consistency | ✅ Finalized & Polished |
 | Connectivity | ✅ Persistent Auto-Reconnect |
 | Pairing UX | ✅ Automated PIN Entry |
+| Mesh Navigation | ✅ Dedicated Bottom Tab (5 tabs) |
 | CI Build (`mesh-dev`) | ✅ Stable |
 

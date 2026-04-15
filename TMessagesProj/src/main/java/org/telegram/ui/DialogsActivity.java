@@ -10893,6 +10893,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     public static final int DIALOGS_TYPE_START_ATTACH_BOT = 14;
     public static final int DIALOGS_TYPE_BOT_REQUEST_PEER = 15;
     public static final int DIALOGS_TYPE_BOT_SELECT_VERIFY = 16;
+    public static final int DIALOGS_TYPE_MESH = 17;
 
     private ArrayList<TLRPC.Dialog> botShareDialogs;
 
@@ -10940,15 +10941,15 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return messagesController.dialogsChannelsOnly;
         } else if (dialogsType == DIALOGS_TYPE_GROUPS_ONLY || dialogsType == DIALOGS_TYPE_IMPORT_HISTORY_GROUPS) {
             return messagesController.dialogsGroupsOnly;
-        } else if (dialogsType == 7 || dialogsType == 8) {
-            MessagesController.DialogFilter dialogFilter = messagesController.selectedDialogFilter[dialogsType == 7 ? 0 : 1];
-            if (dialogFilter == null) {
-                return messagesController.getDialogs(folderId);
-            } else if (dialogFilter.id == MessagesController.MESH_FILTER_ID || dialogFilter.id == 1493 || dialogFilter.id == 1494) {
+        } else if (dialogsType == DIALOGS_TYPE_MESH || dialogsType == 7 || dialogsType == 8) {
+            MessagesController.DialogFilter dialogFilter = (dialogsType == 7 || dialogsType == 8) ? messagesController.selectedDialogFilter[dialogsType == 7 ? 0 : 1] : null;
+            if (dialogsType == DIALOGS_TYPE_MESH || (dialogFilter != null && (dialogFilter.id == MessagesController.MESH_FILTER_ID || dialogFilter.id == 1493 || dialogFilter.id == 1494))) {
                 ArrayList<TLRPC.Dialog> meshDialogs = new ArrayList<>();
-                
+                boolean showChannels = dialogsType == DIALOGS_TYPE_MESH || (dialogFilter != null && (dialogFilter.id == 1493 || dialogFilter.id == MessagesController.MESH_FILTER_ID));
+                boolean showContacts = dialogsType == DIALOGS_TYPE_MESH || (dialogFilter != null && (dialogFilter.id == 1494 || dialogFilter.id == MessagesController.MESH_FILTER_ID));
+
                 // --- MESH CHANNELS (Folder 1493) ---
-                if (dialogFilter.id == 1493 || dialogFilter.id == MessagesController.MESH_FILTER_ID) {
+                if (showChannels) {
                     java.util.ArrayList<org.telegram.messenger.mesh.MeshStorage.LoraChannel> channels =
                             org.telegram.messenger.mesh.MeshStorage.getInstance().getLoraChannels();
                     for (org.telegram.messenger.mesh.MeshStorage.LoraChannel channel : channels) {
@@ -10973,7 +10974,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 }
                 
                 // --- MESH CONTACTS (Folder 1494) ---
-                if (dialogFilter.id == 1494 || dialogFilter.id == MessagesController.MESH_FILTER_ID) {
+                if (showContacts) {
                     java.util.ArrayList<org.telegram.messenger.mesh.MeshStorage.MeshContact> contacts =
                             org.telegram.messenger.mesh.MeshStorage.getInstance().getMeshContacts();
                     for (org.telegram.messenger.mesh.MeshStorage.MeshContact contact : contacts) {

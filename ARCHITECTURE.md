@@ -273,15 +273,25 @@ To maximize character capacity for Cyrillic text over LoRa (which has a strict ~
 | 2026-04-15 | **v17** | **CI Compile Fix & Workflow Simplification**: Fixed Mesh avatar scope bug in `DialogCell.java` and removed unused NDK r23c setup from GitHub Actions. |
 | 2026-04-15 | **v18** | **Security Hardening**: Disabled cleartext traffic, restricted providers/FileProvider paths, and removed sensitive token/key logging. |
 | 2026-04-15 | **v19** | **Connectivity (Phase 18)**: Implemented Persistent Auto-Reconnect (background pulse) and Automated PIN Entry using `MeshStorage`. |
+| 2026-04-15 | **v20** | **Navigation Re-engineering**: Integrated Mesh as a dedicated bottom navigation tab (5-tab layout), removed redundant folder filters, and added premium Lottie icons. |
 
 - [x] **Phase 1: MeshCore Framework Stabilization** (Logcat Analysis, Dedup Logic)
 - [x] **Phase 2: Premium UI Restoration** (Emoji Avatars, Advanced Gradients)
 - [x] **Phase 3: Universal Telemetry** (SNR/Hops Integration in all cells)
-- [ ] **Phase 4: Multi-Node Mesh Routing** (Advanced HOP optimization)
+- [x] **Phase 4: Mesh Navigation Integration** (Dedicated Bottom Tab)
+- [ ] **Phase 5: Multi-Node Mesh Routing** (Advanced HOP optimization)
 
 ---
 
-## 10. Project Rules (from AGENTS.md)
+## 11. Mesh Navigation (Dedicated Tab)
+*   **MainTabsActivity**: Orchestrates the 5-tab navigation system. Mesh is located at index 1 (2nd position).
+*   **Tab Registration**: Uses `GlassTabView.createMainTab` with `R.raw.tab_symbols` for a premium look.
+*   **Filtering Logic**: `DialogsActivity` uses `DIALOGS_TYPE_MESH` to display messages where `id <= -2,000,000,000`.
+*   **UX Isolation**: Mesh Communications are isolated from the main Telegram chat list to emphasize the local LoRa-mesh nature of the service.
+
+---
+
+## 12. Project Rules (from AGENTS.md)
 - **Language**: Russian for chat, English for code/git/docs
 - **Build target**: Android 16, Target SDK 35
 - **Hardware**: Heltec T114, LilyGO running MeshCore firmware ≥ v1.12.0

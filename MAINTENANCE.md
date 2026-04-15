@@ -42,6 +42,7 @@ SNR and Hops are rendered in:
 
 ## 5. Troubleshooting (Deep Dive)s to LoRa when offline |
 | `DialogsActivity.java` | Renders Mesh folders and virtual entries |
+| `MainTabsActivity.java` | Orchestrates the 5-tab navigation system |
 | `ChatMessageCell.java` | Renders Mesh-specific status icons and telemetry |
 | `ApplicationLoader.java` | Initializes `MeshManager` and background service |
 
