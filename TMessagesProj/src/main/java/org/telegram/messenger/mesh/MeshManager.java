@@ -106,6 +106,7 @@ public class MeshManager {
     private boolean isConnecting  = false;
     private boolean isConnected   = false;
     private boolean isHandshakeComplete = false;
+    private boolean isManualDisconnect  = false; // Phase 18: prevents auto-reconnect after manual logout
 
     // Write queue: one command at a time per spec ("Send one command, wait for response")
     private final ConcurrentLinkedQueue<byte[]> writeQueue = new ConcurrentLinkedQueue<>();
@@ -225,9 +226,27 @@ public class MeshManager {
 
             if (BluetoothDevice.ACTION_PAIRING_REQUEST.equals(action)) {
                 int variant = intent.getIntExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT, BluetoothDevice.ERROR);
+                FileLog.d(TAG + ": Pairing request variant=" + variant);
 
-                if (variant == BluetoothDevice.PAIRING_VARIANT_PIN || variant == 1 /* Passkey */) {
-                    FileLog.d(TAG + ": PIN/Passkey requested. User must interact with system dialog.");
+                if (variant == BluetoothDevice.PAIRING_VARIANT_PIN || variant == 1 /* Passkey */ || variant == 2 /* PIN 16 digits */) {
+                    int savedPin = MeshStorage.getInstance().getDevicePin(currentDeviceAddress);
+                    if (savedPin != 0) {
+                        String pinStr = String.valueOf(savedPin);
+                        // Force 6 digits if needed (some devices expect leading zeros)
+                        if (pinStr.length() < 6 && variant == 1) {
+                            pinStr = String.format("%06d", savedPin);
+                        }
+                        FileLog.d(TAG + ": Automatically providing saved PIN for " + currentDeviceAddress);
+                        device.setPin(pinStr.getBytes(StandardCharsets.UTF_8));
+                        try {
+                            device.setPairingConfirmation(true);
+                        } catch (Exception e) {
+                            FileLog.e(TAG + ": Failed to set pairing confirmation", e);
+                        }
+                        abortBroadcast();
+                    } else {
+                        FileLog.d(TAG + ": PIN requested but no saved PIN found. User must interact with system dialog.");
+                    }
                 } else if (variant == BluetoothDevice.PAIRING_VARIANT_PASSKEY_CONFIRMATION || variant == 3 /* Consent */) {
                     device.setPairingConfirmation(true);
                     abortBroadcast();
@@ -484,6 +503,7 @@ public class MeshManager {
         writeQueue.clear();
         isWriting = false;
         isHandshakeComplete = false;
+        isManualDisconnect  = false; // Reset on new connection attempt
         isConnecting = true;
 
         FileLog.d(TAG + ": Connecting to " + currentDeviceAddress + "...");
@@ -527,14 +547,18 @@ public class MeshManager {
     }
 
     private void scheduleReconnect() {
-        if (currentDeviceAddress == null) return;
-        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
-            FileLog.e(TAG + ": Max reconnect attempts reached. Giving up auto-reconnect.");
-            reconnectAttempts = 0;
-            return;
+        if (currentDeviceAddress == null || isManualDisconnect) return;
+        
+        // If we've reached max standard attempts, switch to "background" mode (longer delay)
+        long delay;
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            delay = RECONNECT_DELAYS_MS[reconnectAttempts++];
+        } else {
+            delay = 30_000 + (long)(Math.random() * 10_000); // Pulse every 30-40s thereafter
+            FileLog.d(TAG + ": Switching to background persistent reconnect pulse (" + delay + "ms)");
         }
-        long delay = RECONNECT_DELAYS_MS[reconnectAttempts++];
-        FileLog.d(TAG + ": Reconnect attempt " + reconnectAttempts + " in " + delay + "ms");
+        
+        FileLog.d(TAG + ": Reconnect attempt " + (reconnectAttempts > MAX_RECONNECT_ATTEMPTS ? "∞" : reconnectAttempts) + " in " + delay + "ms");
         handler.postDelayed(() -> {
             if (!isConnected && currentDeviceAddress != null) {
                 BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
@@ -550,6 +574,7 @@ public class MeshManager {
         isConnected = false;
         isConnecting = false;
         isHandshakeComplete = false;
+        isManualDisconnect  = true; // Prevent automatic reconnect pulses
         isWriting = false;
         writeQueue.clear();
         MeshTransportManager.getInstance().setSelectedDeviceAddress(null);

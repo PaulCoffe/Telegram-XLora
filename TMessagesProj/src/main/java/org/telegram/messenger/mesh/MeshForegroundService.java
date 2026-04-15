@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -31,6 +32,21 @@ public class MeshForegroundService extends Service {
         createNotificationChannel();
     }
 
+    private final Handler handler = new Handler();
+    private final Runnable reconnectRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (MeshTransportManager.getInstance().isMeshEnabled()) {
+                MeshManager manager = MeshManager.getInstance();
+                if (!manager.isConnected() && !manager.isConnecting()) {
+                    FileLog.d("MeshForegroundService: Pulse auto-reconnect");
+                    manager.autoConnectToSavedDevice();
+                }
+            }
+            handler.postDelayed(this, 60_000); // Pulse every 60s
+        }
+    };
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Intent notificationIntent = new Intent(this, LaunchActivity.class);
@@ -50,9 +66,8 @@ public class MeshForegroundService extends Service {
             startForeground(NOTIFICATION_ID, notification);
         }
 
-        if (MeshTransportManager.getInstance().isMeshEnabled()) {
-            MeshManager.getInstance().autoConnectToSavedDevice();
-        }
+        handler.removeCallbacks(reconnectRunnable);
+        handler.post(reconnectRunnable);
 
         return START_STICKY;
     }
@@ -60,6 +75,7 @@ public class MeshForegroundService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        handler.removeCallbacks(reconnectRunnable);
         FileLog.d("MeshForegroundService: Destroyed");
     }
 

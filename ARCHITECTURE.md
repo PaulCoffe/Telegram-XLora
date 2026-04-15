@@ -26,12 +26,13 @@ Telegram-XLora is a custom Android client based on Forkgram that integrates **Me
 3. Discover services & characteristics
 4. Request MTU 512
 5. Enable notifications on TX characteristic (descriptor 0x2902)
-6. **Wait for BOND_BONDED** (via `BroadcastReceiver`) before GATT setup to prevent connection drops.
-7. Send `CMD_APP_START (0x01)` → await `PACKET_SELF_INFO (0x05)`
-7. Send `CMD_DEVICE_QUERY (0x16 0x03)` → await `PACKET_DEVICE_INFO (0x0D)`
-8. Send `CMD_SET_DEVICE_TIME (0x09)`
-9. Send `CMD_GET_CHANNEL (0x1F)` × 8 (slots 0-7) → collect `PACKET_CHANNEL_INFO (0x12)`
-10. Send `CMD_SYNC_NEXT_MESSAGE (0x0A)` until `PACKET_NO_MORE_MSGS (0x0A)`
+6. **Automated Pairing**: If the device requires a PIN and a PIN was previously saved in `MeshStorage`, it is provided automatically via `device.setPin()`.
+7. **Wait for BOND_BONDED** (via `BroadcastReceiver`) before GATT setup to prevent connection drops.
+8. Send `CMD_APP_START (0x01)` → await `PACKET_SELF_INFO (0x05)`
+9. Send `CMD_DEVICE_QUERY (0x16 0x03)` → await `PACKET_DEVICE_INFO (0x0D)`
+10. Send `CMD_SET_DEVICE_TIME (0x09)`
+11. Send `CMD_GET_CHANNEL (0x1F)` × 8 (slots 0-7) → collect `PACKET_CHANNEL_INFO (0x12)`
+12. Send `CMD_SYNC_NEXT_MESSAGE (0x0A)` until `PACKET_NO_MORE_MSGS (0x0A)`
 
 ---
 
@@ -45,6 +46,8 @@ Telegram-XLora is a custom Android client based on Forkgram that integrates **Me
 - All listener callbacks dispatched on the **main thread** via `handler.post()`
 - MTU 512 requested after service discovery
 - **Bonding-first sequence**: GATT connection is deferred until the system confirms the device is bonded to ensure encrypted characteristic access.
+- **Persistent Reconnection**: Distinguishes between manual logout (`isManualDisconnect = true`) and accidental drops. Accidental drops trigger a recurring "background pulse" reconnect every 30-40s.
+- **Foreground Heartbeat**: `MeshForegroundService` provides a 60-second periodic trigger to ensure the manager is actively attempting reconnection.
 
 **Listener interface** (`MeshManagerListener`):
 ```java
@@ -257,6 +260,7 @@ To maximize character capacity for Cyrillic text over LoRa (which has a strict ~
 | 2026-04-14 | **v16** | **Telemetry Integration & Structural Repair**: Resolved structural brace imbalances in `DialogCell.java` and `MeshStorage.java`, integrated SNR/Hops list rendering. |
 | 2026-04-15 | **v17** | **CI Compile Fix & Workflow Simplification**: Fixed Mesh avatar scope bug in `DialogCell.java` and removed unused NDK r23c setup from GitHub Actions. |
 | 2026-04-15 | **v18** | **Security Hardening**: Disabled cleartext traffic, restricted providers/FileProvider paths, and removed sensitive token/key logging. |
+| 2026-04-15 | **v19** | **Connectivity (Phase 18)**: Implemented Persistent Auto-Reconnect (background pulse) and Automated PIN Entry using `MeshStorage`. |
 
 
 ---

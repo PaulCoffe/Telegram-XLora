@@ -256,12 +256,21 @@
 - [x] **Adaptive Input**: Enforced 120-symbol limit and enabled fluid multi-line expansion (max 10 lines) for Mesh dialogs.
 - [x] **Message Alignment**: Verified and enforced Right (Out) / Left (In) alignment for Mesh messages.
 
+---
+
+## Phase 21 — Persistent Reconnection & Automated Pairing ✅ (Complete)
+
+- [x] **Automated PIN Entry**: Implemented automatic passkey injection in `MeshManager.pairingReceiver` using `MeshStorage` pins.
+- [x] **Background Reconnect**: Modified `scheduleReconnect` to transition into a persistent "background pulse" mode (30-40s delay) after initial failures.
+- [x] **Manual Disconnect Guard**: Introduced `isManualDisconnect` state to prevent unwanted auto-reconnection after user-initiated logouts.
+- [x] **Foreground Heartbeat**: Added a 60-second periodic pulse in `MeshForegroundService` to keep the reconnection logic active in the background.
+
 ## Current Status (2026-04-15)
 
 | Component | Status |
 |-----------|--------|
 | UI/UX Consistency | ✅ Finalized & Polished |
-| Naming Fallback | ✅ Robust |
-| Input Capacity | ✅ 120 Symbols |
+| Connectivity | ✅ Persistent Auto-Reconnect |
+| Pairing UX | ✅ Automated PIN Entry |
 | CI Build (`mesh-dev`) | ✅ Stable |
 
