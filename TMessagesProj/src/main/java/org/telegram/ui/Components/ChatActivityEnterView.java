@@ -6497,8 +6497,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     private boolean isMeshDialog(long id) {
-        // Mesh dialog IDs are large negative numbers starting from -2,000,000,000
-        return id <= -2000000000L;
+        // Mesh synthetic dialog IDs are in range [-4,000,000,000, -2,000,000,000]
+        // Regular Telegram channels use IDs much smaller than -1,000,000,000,000 (-100...)
+        return id <= -2000000000L && id >= -4000000000L;
     }
 
     public void setChatInfo(TLRPC.ChatFull chatInfo) {

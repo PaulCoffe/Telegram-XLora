@@ -258,10 +258,9 @@
 
 ---
 
+## Phase 23 — Mesh Navigation (Folder-based) ✅ (Complete)
 
 ---
-
-## Phase 23 — Mesh Navigation Re-engineering ✅ (Complete)
 
 ## Phase 24 — Telemetry Persistence & Delivery Hardening ✅ (Complete)
 
@@ -271,12 +270,34 @@
 - [x] Unified and polished telemetry footer in message bubbles (`ChatMessageCell`).
 - [x] Verified zero "stuck status" messages via persistent token recovery logic.
 
+---
+
 ## Phase 25 — Build Stabilization & Delivery Synchronization ✅ (Complete)
 
 - [x] Fixed `DialogCell.java` compilation error (Theme API usage).
 - [x] Restored `NotificationCenter` import in `MeshManager.java`.
 - [x] Synchronized `MessagesStorage.java` and `SendMessagesHelper.java` persistent state logic.
 - [x] Result: Restored CI/CD pipeline integrity on `mesh-dev`.
+
+---
+
+## Phase 4: UI Reversion & Stabilization ✅ (Complete)
+- [x] Remove Mesh bottom navigation tab (MainTabsActivity)
+- [x] Standardize 5-tab native layout
+- [x] Cleanup redundant launcher assets
+- [x] Verify synthetic ID filtering in MessagesController
+
+---
+
+## Phase 26 — Mesh UI Reversion & Stabilization ✅ (Complete)
+
+- [x] Removed dedicated Mesh bottom navigation tab (MainTabsActivity)
+- [x] Restored standard 5-tab Telegram layout
+- [x] Fixed chat list visibility for standard channels (MessagesController)
+- [x] Isolated 120-char limit to Mesh-only dialogs (ChatActivityEnterView)
+- [x] APK size optimization: deleted 3.6MB logo.png
+
+---
 
 ## Current Status (2026-04-15)
 
@@ -285,7 +306,7 @@
 | UI/UX Consistency | ✅ Finalized & Polished |
 | Connectivity | ✅ Persistent Auto-Reconnect |
 | Pairing UX | ✅ Automated PIN Entry |
-| Mesh Navigation | ✅ Dedicated Bottom Tab (5 tabs) |
+| Mesh Navigation | ✅ Folder-based (Standard 5-tab UI) |
 | Delivery Reliability| ✅ Persistent ACK Matching (DB v7) |
-| CI Build (`mesh-dev`) | ✅ Recovering / Stabilized |
+| CI Build (`mesh-dev`) | ✅ Stabilized & Optimized |
 

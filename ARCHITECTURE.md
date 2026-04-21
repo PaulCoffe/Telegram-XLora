@@ -27,6 +27,10 @@ Telegram-XLora is a custom Android client based on Forkgram that integrates **Me
 4. Request MTU 512
 5. Enable notifications on TX characteristic (descriptor 0x2902)
 6. **Automated Pairing**: If the device requires a PIN and a PIN was previously saved in `MeshStorage`, it is provided automatically via `device.setPin()`.
+## 12. Asset & Resource Policy (Lean Build)
+- **Constraint**: No binary assets > 1MB allowed in the repository unless strictly necessary for UI/UX.
+- **Optimization**: Large promotional images or redundant logos (like `logo.png`) must be removed or moved to external CDN if possible.
+- **Purity**: The project maintains a "Stable Purity" state where UI changes are integrated seamlessly without breaking standard Telegram aesthetics.
 7. **Wait for BOND_BONDED** (via `BroadcastReceiver`) before GATT setup to prevent connection drops.
 8. Send `CMD_APP_START (0x01)` → await `PACKET_SELF_INFO (0x05)`
 9. Send `CMD_DEVICE_QUERY (0x16 0x03)` → await `PACKET_DEVICE_INFO (0x0D)`
@@ -143,6 +147,8 @@ CREATE TABLE tg_message_tracker (
 - Channel slot N: `-(2_000_000_000 + N)`
 - Contact (pubkey-derived): `-(3_000_000_000 + abs(pubkey.hashCode()) % 1_000_000_000)`
 
+**Range check for isolation**: Mesh synthetic IDs are strictly within the range `[-4,000,000,000, -2,000,000,000]`. This ensures zero collision with standard Telegram channel IDs (which are typically ` < -100,000,000,000`).
+
 ---
 
 ### `MeshTransportManager` (`org.telegram.messenger.mesh`)
@@ -186,7 +192,7 @@ The `MessagesController` intercepts `loadMessagesInternal()` for dialog IDs < -2
 
 ### 5.2 Premium UI & Mesh Visualization
 To maintain Telegram-XLora's "premium" feel, Mesh-specific UI elements are integrated with deep hooks:
-- **Character Limits**: Enforced 120-char limit for LoRa packets in `ChatActivityEnterView` to ensure protocol compatibility without UI fragmentation.
+- **Character Limits**: Enforced 120-char limit for LoRa packets in `ChatActivityEnterView.isMeshDialog`. This limit is strictly isolated to Mesh synthetic IDs `[-4B, -2B]` to avoid restricting standard Telegram chats.
 - **Emoji-First Avatars**: `AvatarDrawable` prioritizes parsing emojis from node names to create recognizable, vibrant identification marks.
 - **Dynamic Gradients**: `setInfo` in `DialogCell` uses `advancedGradient = true` and hashes the node's public key (via its synthetic ID) to ensure consistent, unique coloring for every Mesh contact.
 - **Universal Telemetry Hub**: 
@@ -286,21 +292,22 @@ To maximize character capacity for Cyrillic text over LoRa (which has a strict ~
 | 2026-04-15 | **v19** | **Connectivity (Phase 18)**: Implemented Persistent Auto-Reconnect (background pulse) and Automated PIN Entry using `MeshStorage`. |
 | 2026-04-15 | **v20** | **Navigation Re-engineering**: Integrated Mesh as a dedicated bottom navigation tab (5-tab layout), removed redundant folder filters, and added premium Lottie icons. |
 | 2026-04-15 | **v21** | **Build Stabilization & Delivery Hardening**: Restored CI/CD integrity, implemented DB v7 with `tg_message_tracker` persistence, and finalized Telegram-to-Mesh delivery status synchronization. |
+| 2026-04-21 | **v23** | **UI Finalization & Asset Cleanup**: Restored standard 5-tab layout, removed ~500 redundant launcher assets to optimize APK size. |
+| 2026-04-17 | **v22** | **UI Reversion & Stabilization**: Removed dedicated Mesh navigation tab, restored standard 5-tab layout. |
 
 - [x] **Phase 1: MeshCore Framework Stabilization** (Logcat Analysis, Dedup Logic)
 - [x] **Phase 2: Premium UI Restoration** (Emoji Avatars, Advanced Gradients)
 - [x] **Phase 3: Universal Telemetry** (SNR/Hops Integration in all cells)
-- [x] **Phase 4: Mesh Navigation Integration** (Dedicated Bottom Tab)
+- [x] **Phase 4: Mesh Navigation Integration** (Standardized 5-Tab Layout)
 - [x] **Phase 5: Persistent Delivery Reliability** (Stage 3 ACK matching, DB v7)
 - [ ] **Phase 6: Multi-Node Mesh Routing** (Advanced HOP optimization)
 
 ---
 
-## 11. Mesh Navigation (Dedicated Tab)
-*   **MainTabsActivity**: Orchestrates the 5-tab navigation system. Mesh is located at index 1 (2nd position).
-*   **Tab Registration**: Uses `GlassTabView.createMainTab` with `R.raw.tab_symbols` for a premium look.
-*   **Filtering Logic**: `DialogsActivity` uses `DIALOGS_TYPE_MESH` to display messages where `id <= -2,000,000,000`.
-*   **UX Isolation**: Mesh Communications are isolated from the main Telegram chat list to emphasize the local LoRa-mesh nature of the service.
+## 11. Mesh Navigation (Folder-Based)
+*   **Access Model**: Mesh functionality is accessed via dedicated folders in the main chat list: **Mesh Channels** (ID 1493) and **Mesh Contacts** (ID 1494).
+*   **Standard Layout**: The application uses the standard 5-tab Telegram navigation. The dedicated "Mesh" tab has been removed to maintain UI consistency.
+*   **Filtering Logic**: `DialogsActivity` handles synthetic IDs `[-4B, -2B]` when these folders are active. `MessagesController.includesDialog` ensures these IDs do not leak into standard folders (like "Channels" or "Groups").
 
 ---
 

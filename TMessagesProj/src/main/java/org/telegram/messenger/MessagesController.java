@@ -273,22 +273,6 @@ public class MessagesController extends BaseController implements NotificationCe
     
     public ArrayList<DialogFilter> dialogFilters = new ArrayList<>();
 
-    public void checkMeshFilter() {
-        // Remove ALL Mesh folders from the main list as they are now in a dedicated tab
-        boolean changed = false;
-        for (int a = 0; a < dialogFilters.size(); a++) {
-            int id = dialogFilters.get(a).id;
-            if (id == MESH_FILTER_ID || id == MESH_CHANNELS_FILTER_ID || id == MESH_CONTACTS_FILTER_ID) {
-                DialogFilter filter = dialogFilters.remove(a);
-                dialogFiltersById.remove(filter.id);
-                a--;
-                changed = true;
-            }
-        }
-        if (changed) {
-            NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.dialogFiltersUpdated);
-        }
-    }
 
     private void checkSpecificMeshFilter(boolean enabled, int filterId, String name) {
         int existingIndex = -1;
@@ -1337,7 +1321,7 @@ public class MessagesController extends BaseController implements NotificationCe
                 return dialogId <= -3000000000L && dialogId >= -3999999999L;
             }
             // Exclude mesh dialogs from any other folder (except All)
-            if (id != 0 && (dialogId <= -2000000000L)) {
+            if (id != 0 && (dialogId <= -2000000000L && dialogId >= -4000000000L)) {
                 return false;
             }
 
@@ -2290,8 +2274,12 @@ public class MessagesController extends BaseController implements NotificationCe
                     putUsers(users, true);
                     putChats(chats, true);
                     dialogFiltersLoaded = true;
+                    // MeshCore: Ensure folders 1493 and 1494 exist
+                    if (org.telegram.messenger.mesh.MeshTransportManager.getInstance().isMeshEnabled()) {
+                        checkSpecificMeshFilter(true, MESH_CHANNELS_FILTER_ID, "Mesh Channels");
+                        checkSpecificMeshFilter(true, MESH_CONTACTS_FILTER_ID, "Mesh Contacts");
+                    }
                     getNotificationCenter().postNotificationName(NotificationCenter.dialogFiltersUpdated);
-                    checkMeshFilter();
                     if (remote == 0) {
                         loadRemoteFilters(false);
                     }

@@ -73,24 +73,21 @@ import me.vkryl.android.animator.FactorAnimator;
 public class MainTabsActivity extends ViewPagerActivity implements NotificationCenter.NotificationCenterDelegate, FactorAnimator.Target {
     public static final int TABS_COUNT = 5;
     private static final int POSITION_CHATS = 0;
-    private static final int POSITION_MESH = 1;
-    private static final int POSITION_CONTACTS = 2;
-    private static final int POSITION_CALLS_OR_SETTINGS = 3;
-    private static final int POSITION_PROFILE = 4;
+    private static final int POSITION_CONTACTS = 1;
+    private static final int POSITION_CALLS_OR_SETTINGS = 2;
+    private static final int POSITION_PROFILE = 3;
 
     private static final int INDEX_CHATS = 0;
     private static final int INDEX_CONTACTS = 1;
     private static final int INDEX_SETTINGS = 2;
     private static final int INDEX_CALLS = 3;
     private static final int INDEX_PROFILE = 4;
-    private static final int INDEX_MESH = 5;
 
     private static int indexToPosition(int index) {
         if (index == INDEX_CHATS) return 0;
-        if (index == INDEX_MESH) return 1;
-        if (index == INDEX_CONTACTS) return 2;
-        if (index == INDEX_SETTINGS || index == INDEX_CALLS) return 3;
-        if (index == INDEX_PROFILE) return 4;
+        if (index == INDEX_CONTACTS) return 1;
+        if (index == INDEX_SETTINGS || index == INDEX_CALLS) return 2;
+        if (index == INDEX_PROFILE) return 3;
         return 0;
     }
 
@@ -255,9 +252,8 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         tabsView.setClipChildren(false);
         tabsView.setPadding(dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4), dp(DialogsActivity.MAIN_TABS_MARGIN + 4));
 
-        tabs = new GlassTabView[6];
+        tabs = new GlassTabView[5];
         tabs[INDEX_CHATS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CHATS, R.string.MainTabsChats);
-        tabs[INDEX_MESH] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.SYMBOLS, R.string.Mesh);
         tabs[INDEX_CONTACTS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CONTACTS, R.string.MainTabsContacts);
         tabs[INDEX_SETTINGS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.SETTINGS, R.string.Settings);
         tabs[INDEX_CALLS] = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.CALLS, R.string.MainTabsCalls);
@@ -515,7 +511,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     @Override
     protected int getFragmentsCount() {
-        return TABS_COUNT;
+        return 4; // CHATS, CONTACTS, CALLS/SETTINGS, PROFILE
     }
 
     @Override
@@ -560,13 +556,6 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             args.putBoolean("needFinishFragment", false);
             args.putBoolean("hasMainTabs", true);
             return new ContactsActivity(args);
-        } else if (position == POSITION_MESH) {
-            Bundle args = new Bundle();
-            args.putBoolean("hasMainTabs", true);
-            args.putInt("type", DialogsActivity.DIALOGS_TYPE_MESH);
-            DialogsActivity meshActivity = new DialogsActivity(args);
-            meshActivity.setMainTabsActivityController(new MainTabsActivityControllerImpl());
-            return meshActivity;
         } else if (position == POSITION_CALLS_OR_SETTINGS) {
             if (getUserConfig().showCallsTab) {
                 Bundle args = new Bundle();

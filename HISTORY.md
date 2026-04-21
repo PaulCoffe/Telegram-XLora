@@ -1,5 +1,31 @@
 ---
 
+## [2026-04-17] Phase 26: Mesh UI Reversion & Stabilization (mesh-dev)
+## [2026-04-20] Phase 26: Mesh UI Reversion & Stabilization (mesh-dev)
+
+### Objective
+Restore the application to its stable, standard state by reverting recent Mesh-related UI regressions, fixing chat list visibility, and optimizing APK size.
+
+### Changes
+1. **Navigation Restoration**:
+   - **MainTabsActivity.java**: Removed the dedicated "Mesh" bottom navigation tab. Restored the standard 5-tab Telegram layout (Chats, Contacts, Settings, Calls, Profile).
+2. **Chat List Visibility Fix**:
+   - **MessagesController.java**: Refined the `includesDialog` range check to strictly target Mesh synthetic IDs `[-4B, -2B]`. This prevents standard Telegram channels (IDs < -100B) from being incorrectly excluded from folders.
+   - **MessagesController.java**: Removed `checkMeshFilter()` to allow Mesh folders ("Mesh Channels", "Mesh Contacts") to reappear in the main chat list as the primary access point for Mesh features.
+3. **Input Constraint Isolation**:
+   - **ChatActivityEnterView.java**: Refined `isMeshDialog` to use the robust `[-4B, -2B]` range check. Enforced the 120-symbol limit and UCF hint *only* for Mesh dialogs, restoring standard limits and hints for regular Telegram chats.
+4. **Asset Optimization**:
+   - **File System**: Deleted the redundant 3.6MB `logo.png` asset to reduce APK size and build bloat.
+5. **Documentation Consistency**:
+   - Synchronized `ARCHITECTURE.md`, `ROADMAP.md`, and `MAINTENANCE.md` as per the Multi-Agent Protocol v7.3.
+
+### Result
+- **UX**: Restored standard Telegram navigation and chat list behavior while maintaining Mesh accessibility through folders.
+- **Performance**: Reduced APK size by removing unused heavy assets.
+- **Stability**: Fixed a major regression where standard channels were hidden from the user.
+
+---
+
 ## [2026-04-15] Phase 25: CI Build Stabilization & Delivery Synchronization Hardening (mesh-dev)
 
 ### Objective
